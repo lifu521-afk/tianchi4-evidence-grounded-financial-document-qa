@@ -17,6 +17,16 @@ auditable structured outputs from enterprise financial documents.
 > regulatory approval system. It does not replace professional review,
 > compliance controls, or final business decisions.
 
+## 精准 Prompt | Precision Prompt
+
+可迁移的高精度提示词、证据门控、金融领域核验清单、高精度多 Agent 流程和低 Token 单次调用规范见 [`docs/PRECISION_PROMPT.md`](docs/PRECISION_PROMPT.md)。迁移到其他比赛项目时，先读取新规则和提交模板，再映射题型、答案字段、reasoning 与 token 统计要求。
+
+The portable precision prompt, evidence gate, financial-domain checklists,
+full-audit workflow, and compact single-call workflow are documented in
+[`docs/PRECISION_PROMPT.md`](docs/PRECISION_PROMPT.md). For another competition,
+inspect its rules and submission template before mapping question types,
+answer fields, reasoning, and token accounting.
+
 ## 1. 企业要解决的核心问题 | Enterprise Problem
 
 金融企业通常拥有大量年报、合同、募集说明书、保险条款、监管文件和研究报告。业务人员需要回答“原文在哪里、具体数字是多少、条款如何约束、不同文档是否一致”，但人工逐页查找耗时，直接让大模型阅读整份文档又容易出现幻觉、漏证据、数字错位和成本失控。
