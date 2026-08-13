@@ -1,319 +1,454 @@
-# 天池金融长文档问答 Agent | Tianchi Long-Document QA Agent
+# 天池金融长文档问答 Agent | Tianchi Financial Long-Document QA Agent
 
-一个面向金融长文档问答比赛的证据增强型 Qwen Agent，覆盖 A 榜和 B 榜。项目将原始文档解析、结构化切分、关键词检索、模型作答、token 统计、断点续跑和提交校验组织成一条可审计、可复现的流程。
+一个面向金融文档知识检索与问答的证据增强型 Qwen Agent。项目最初服务于天池金融长文档问答 A/B 榜，但当前代码的技术能力可以抽象为：从企业金融文档中定位事实、核对条款、比较指标、提取答案，并生成可审计的依据和结构化结果。
 
-An evidence-grounded Qwen agent for financial long-document question answering. It supports both the A and B tracks and turns document parsing, structured chunking, lexical retrieval, answer generation, token accounting, checkpointing, and submission validation into one auditable and reproducible pipeline.
+An evidence-grounded Qwen agent for financial document retrieval and question
+answering. It was developed for the Tianchi financial long-document QA
+competition, but its reusable technical capability is broader: locating facts,
+verifying clauses, comparing metrics, extracting answers, and producing
+auditable structured outputs from enterprise financial documents.
 
-## 项目定位 | Project Scope
+> **定位边界 | Scope boundary**
+>
+> 本项目是文档知识检索与问答系统，不是交易系统、投资顾问、承保系统、自动法律意见系统或监管审批系统。它不能替代金融机构的专业人员、合规审查和最终决策。
+>
+> This is a document intelligence and QA system. It is not a trading system,
+> investment adviser, underwriting system, automated legal-opinion system, or
+> regulatory approval system. It does not replace professional review,
+> compliance controls, or final business decisions.
 
-本仓库保存**方法、代码和文档**，不保存比赛数据、模型输出或 API key。数据集必须由使用者根据比赛授权放在本地目录，目录结构见 [docs/DATA_LAYOUT.md](docs/DATA_LAYOUT.md)；真实 key 通过 `local_config.py` 或环境变量配置。
+## 1. 企业要解决的核心问题 | Enterprise Problem
 
-This repository contains the **method, source code, and documentation**. It intentionally excludes competition data, model outputs, caches, submission files, and API keys. Users must provide authorized datasets locally according to [docs/DATA_LAYOUT.md](docs/DATA_LAYOUT.md) and configure credentials through `local_config.py` or environment variables.
+金融企业通常拥有大量年报、合同、募集说明书、保险条款、监管文件和研究报告。业务人员需要回答“原文在哪里、具体数字是多少、条款如何约束、不同文档是否一致”，但人工逐页查找耗时，直接让大模型阅读整份文档又容易出现幻觉、漏证据、数字错位和成本失控。
 
-完整功能清单、已完成模块、输入输出、运行模式和当前局限见 [docs/CAPABILITIES.md](docs/CAPABILITIES.md)。
+Financial organizations maintain large collections of annual reports,
+contracts, offering documents, insurance policy wordings, regulatory texts,
+and research reports. Analysts need to answer “where is the source, what is
+the exact number, what does the clause require, and do the documents agree?”
+Manual page-by-page review is slow, while sending entire documents to an LLM
+can cause hallucinations, missing evidence, numeric mismatches, and excessive
+cost.
 
-See [docs/CAPABILITIES.md](docs/CAPABILITIES.md) for the complete capability
-inventory, implemented modules, inputs and outputs, run modes, and current
-limitations.
+本项目针对的是一个受规则约束的企业文档问答问题：
 
-## 项目主要针对的问题（结合赛题规则） | Rule-Driven Problems Addressed
+The project addresses a governed document-QA problem with four constraints:
 
-本项目主要针对的不是普通的开放式聊天，而是“**必须依据指定金融原文作答，并同时满足准确率、推理摘要、Token 统计和 CSV 提交格式要求**”的长文档问答任务。赛题规则决定了系统必须同时解决以下问题：
+1. **答案必须基于指定原文**：不能用模型常识替代来源证据。
+2. **答案必须精确匹配题型**：单选、多选、判断、计算和抽取题有不同输出约束。
+3. **过程必须可审计**：B 榜还要求 reasoning 和真实 API usage。
+4. **结果必须可提交、可恢复、可复盘**：CSV、summary、token、证据和 checkpoint 必须一致。
 
-This project targets more than ordinary open-ended chat. It addresses a
-long-document QA task in which answers must be grounded in the supplied
-financial sources while satisfying **accuracy, reasoning-summary, token
-accounting, and CSV submission requirements**. The rules create the following
-engineering problems:
+1. **Answers must be grounded in the supplied sources**, not model memory.
+2. **Answers must respect the question type**, with different constraints for
+   choices, true/false, calculations, and extraction.
+3. **The process must be auditable**, including reasoning and raw API usage on
+   the B track.
+4. **The workflow must be recoverable and reviewable**, with consistent CSV,
+   summary, token, evidence, and checkpoint artifacts.
 
-### 1. 长文档中快速找到正确原文 | Finding the Right Evidence in Long Documents
+## 2. 重点覆盖的金融业务场景 | Financial Business Areas
 
-赛题答案必须来自给定文档，而不是来自模型的常识或猜测。金融原文通常很长，关键信息可能位于不同页、表格、脚注或多个文档中。如果直接把整份文档放进 prompt，容易超出上下文限制，也会使模型忽略真正相关的段落。
+代码中的 `agent/domain.py` 明确配置了五类金融文本领域。以下是项目已经实际实现的业务核查重点，不是泛化的金融宣传。
 
-The answer must come from the supplied documents rather than model memory or
-guesswork. Financial sources are long, and the decisive fact may be in a
-different page, table, footnote, or document. Sending an entire document to the
-prompt can exceed the context budget and dilute the relevant evidence.
+The domain profiles in `agent/domain.py` explicitly cover five financial text
+areas. The following are the implemented business checks, not a claim of
+general financial coverage.
 
-因此项目实现文档解析、表格保留、可追踪切片和分层检索，优先把与题目相关的原文位置交给模型。
+### 2.1 金融合同与债券条款 | Financial Contracts and Bond Terms
 
-The project therefore implements document parsing, table preservation,
-traceable chunking, and layered retrieval to provide the model with the most
-relevant source locations first.
+**面向的业务问题：**
 
-### 2. 多选题不能漏选、错选或多选 | Exact Multiple-Choice Matching
+**Business questions addressed:**
 
-按照赛题规则，多选题通常需要与标准答案完整匹配，漏选、错选和多选都可能判错。只让模型直接输出一个整体答案，容易出现“选项判断正确但最终组合错误”，或者某个选项没有被单独核实。
+- 发行人、债券名称和发行主体是否对应；
+- 发行规模、期限、票面利率和付息兑付安排是什么；
+- 主体评级、债项评级、担保安排如何描述；
+- 是否存在回售、赎回、转股或募集资金用途约束；
+- 多份募集说明书或合同的条款是否一致。
 
-Under the rules, multiple-choice answers generally require an exact match.
-Missing, incorrect, or extra options may all be scored wrong. Asking the model
-for only one final string can produce an incorrect combination even when some
-individual judgments are correct.
+- Whether issuer, bond, and issuing entity match.
+- What the issue size, maturity, coupon, payment, and redemption terms are.
+- How issuer ratings, bond ratings, and guarantees are described.
+- Whether put, call, conversion, or use-of-proceeds constraints apply.
+- Whether terms agree across offering documents or contracts.
 
-项目让 A/B/C/D 选项分别参与检索和判断，再进行去重、排序和最终答案组合，从流程上降低漏选、误选和字母顺序错误。
+**适合的企业任务 | Suitable enterprise tasks:** 条款定位、合同对比、发行材料核对、尽调资料检索。
 
-The project retrieves and judges A/B/C/D options independently, then performs
-deduplication, sorting, and final answer assembly to reduce omissions, false
-selections, and ordering errors.
+Suitable for clause lookup, contract comparison, offering-document review,
+and due-diligence research.
 
-### 3. 金融数字和条款容易被误读 | Financial Numbers and Clauses Are Easy to Misread
+**不应直接用于 | Should not be used directly for:** 自动决定是否投资、自动签约或替代法务出具法律意见。
 
-赛题中的错误经常来自年份、报告期、单位、百分比、金额、指标口径、条款编号、时限或“应当/不得/可以”等义务强度，而不是来自普通语言理解。一个数字看似相同，可能属于不同年份或不同单位。
+It must not directly decide whether to invest, execute a contract, or replace
+legal counsel.
 
-Many errors come from reporting periods, units, percentages, amounts, metric
-definitions, clause identifiers, deadlines, or obligation strength such as
-“must”, “must not”, and “may”. A matching number may still belong to a
-different year or unit.
+### 2.2 财务报告与经营指标 | Financial Reports and Operating Metrics
 
-项目针对保险、监管、金融合同、财务报告和研究报告设置领域化核查规则，要求模型同时核对数值、口径、时间和适用范围。
+**面向的业务问题：**
 
-The project adds domain-aware checks for insurance, regulation, financial
-contracts, financial reports, and research reports. The model must verify the
-value, definition, period, and scope together.
+**Business questions addressed:**
 
-### 4. B 榜 reasoning 不能空泛 | B-Track Reasoning Must Be Auditable
+- 某一报告年度的营业收入、归母净利润和经营现金流；
+- 财报单位是元、万元、亿元还是其他口径；
+- 同比、占比、研发投入比例等指标如何计算；
+- 分红、回购、研发投入和现金流数据在不同年度如何变化；
+- 多家公司或多年度指标的横向、纵向比较。
 
-B 榜规则要求提交 `reasoning`，并可能根据逻辑连贯性、论证完整性和表达清晰度评分。空文本、只重复答案、与题目无关或与答案矛盾的摘要可能失分。
+- Revenue, attributable net profit, and operating cash flow for a reporting year.
+- Whether figures are in yuan, ten-thousand yuan, hundred-million yuan, or
+  another unit.
+- How year-on-year, ratio, and R&D-intensity metrics should be calculated.
+- How dividends, buybacks, R&D, and cash flow change across years.
+- Cross-company and multi-year comparisons.
 
-The B-track requires a `reasoning` field and may score logical coherence,
-completeness, and clarity. Empty, answer-only, irrelevant, or contradictory
-summaries can receive no credit.
+**适合的企业任务 | Suitable enterprise tasks:** 财报问答、指标抽取、经营数据核对、投研资料初筛。
 
-项目生成“证据位置 + 关键事实 + 必要计算或判断 + 最终结论”的简短摘要，不要求提交完整思维链，但要求摘要能够支持最终答案并适合审计。
+Suitable for report QA, metric extraction, operating-data checks, and initial
+research screening.
 
-The project produces a concise summary in the form “evidence location + key
-fact + necessary calculation or judgment + conclusion”. It does not require a
-hidden chain of thought, but the summary must support the submitted answer and
-remain auditable.
+**关键风险 | Key risk:** 该系统能辅助定位和计算，但不能替代财务人员对会计准则、合并口径和审计结论的确认。
 
-### 5. Token 必须真实、完整且逐题统计 | Token Usage Must Be Real and Complete
+It can assist with locating and calculating figures, but does not replace
+accounting, consolidation, or audit review.
 
-B 榜规则要求 `prompt_tokens`、`completion_tokens` 和 `total_tokens` 直接来自允许模型 API 的原始 `usage` 字段。同一道题发生多次调用时，证据摘要、答案生成、复核、reasoning 和重试等相关调用都必须计入，不能只记录最后一次调用或手动估算。
+### 2.3 保险产品条款 | Insurance Product Terms
 
-The B-track requires `prompt_tokens`, `completion_tokens`, and `total_tokens`
-to come directly from the raw `usage` fields returned by an allowed model API.
-When a question uses multiple calls, related evidence, answer, review,
-reasoning, and retry calls must all be included. Recording only the last call or
-manually estimating usage is not compliant.
+**面向的业务问题：**
 
-项目为每题建立 usage 账本，按题汇总所有相关调用，并检查：
+**Business questions addressed:**
 
-The project keeps a per-question usage ledger and validates:
+- 保险责任和身故保险金的触发条件；
+- 等待期、年龄或期间限制；
+- 现金价值、已交保费、保单账户价值和领取条件；
+- 退保、合同终止和免责条款；
+- 多个保险产品条款的责任范围和限制比较。
 
-```text
-total_tokens = prompt_tokens + completion_tokens
-summary.total_tokens = sum(question.total_tokens)
-```
+- Conditions triggering coverage and death benefits.
+- Waiting periods, age limits, and time restrictions.
+- Cash value, paid premiums, policy-account value, and withdrawal conditions.
+- Surrender, termination, and exclusions.
+- Comparisons of coverage and restrictions across products.
 
-### 6. 答案正确也可能因 CSV 格式失分 | Correct Answers Can Still Fail Validation
+**适合的企业任务 | Suitable enterprise tasks:** 条款检索、产品资料对比、客服知识库初步问答、核保前资料定位。
 
-赛题要求固定表头、逐题一行、合法 `qid`、正确答案槽位和 summary 汇总。A 榜与 B 榜字段不同，不能把 A 榜的 `answer` 列直接当作 B 榜的 `answer_1` 至 `answer_4`，也不能遗漏 B 榜 `reasoning`。
+Suitable for policy lookup, product-document comparison, first-line knowledge
+support, and pre-underwriting document location.
 
-The rules require an exact header, one row per question, valid qids, correct
-answer slots, and consistent summary totals. A- and B-track schemas differ: an
-A-track `answer` column cannot be submitted directly as B-track
-`answer_1`-`answer_4`, and B-track `reasoning` cannot be omitted.
+**关键风险 | Key risk:** 保险责任解释具有法律和业务后果，最终结果必须经过保险产品、精算、法务或合规人员确认。
 
-项目提供独立的 A 榜和 B 榜校验器，在调用模型和提交平台之前检查字段、答案编码、qid、token、reasoning 和汇总行。
+Coverage interpretation has legal and business consequences and requires final
+review by product, actuarial, legal, or compliance teams.
 
-Separate A- and B-track validators check fields, answer encoding, qids, token
-usage, reasoning, and summary rows before a file is sent to the platform.
+### 2.4 监管规则与公司治理 | Regulation and Corporate Governance
 
-### 7. 长任务中断会造成重复消耗 | Long Jobs Can Be Interrupted
+**面向的业务问题：**
 
-100 道长文档题目的完整运行可能耗时较长，网络错误、API 超时、电脑休眠或终端关闭都会导致任务中断。如果没有缓存，续跑时可能重新调用已经完成的题目，浪费 token 并增加结果不一致的风险。
+**Business questions addressed:**
 
-Running a full set of long-document questions can take time. Network errors,
-API timeouts, sleep, or terminal closure may interrupt the process. Without
-caching, resuming may repeat completed calls, wasting tokens and increasing
-result variance.
+- “应当、不得、可以”等义务强度的差异；
+- 条款编号、适用对象、例外条件和生效范围；
+- 工作日、报告期限和保存期限；
+- 普通决议、特别决议、表决比例；
+- 对外担保、募集资金用途、独立董事和章程修改等条件。
 
-项目提供单题缓存、checkpoint、停止信号和 resume 模式，使任务可以在当前题完成保存后安全停止，并从未完成题继续。
+- Differences between obligations, prohibitions, and permissions.
+- Clause identifiers, applicable parties, exceptions, and effective scope.
+- Business-day, reporting, and retention deadlines.
+- Ordinary resolutions, special resolutions, and voting ratios.
+- Conditions concerning guarantees, use of proceeds, independent directors, and
+  charter amendments.
 
-The project provides per-question caches, checkpoints, stop signals, and a
-resume mode. A run can stop after safely saving the current question and
-continue with unfinished questions later.
+**适合的企业任务 | Suitable enterprise tasks:** 监管文件检索、制度条款定位、公司治理规则核对、合规人员初筛。
 
-### 8. 精度提升不能靠无依据地整体改答案 | Accuracy Improvements Must Be Evidence-Based
+Suitable for regulatory lookup, policy-clause location, governance-rule
+checks, and compliance-team first-pass review.
 
-多轮复核不一定提升准确率，模型有可能把已经正确的基线答案改错。赛题又是逐题精确匹配，因此“所有题重新生成一遍”并不等于更高分。
+**关键风险 | Key risk:** 这是规则文本辅助检索，不是自动合规结论；法规更新、生效日期和适用主体必须由合规人员确认。
 
-More review calls do not automatically improve accuracy. A model may change a
-correct baseline answer into a wrong one, and exact per-question scoring makes
-such regressions costly. Rerunning every question is not the same as improving
-accuracy.
+This is regulatory-text retrieval, not an automated compliance conclusion.
+Updates, effective dates, and applicable entities require compliance review.
 
-项目使用风险题筛选、证据门控和基线保护：只有新答案得到直接证据支持，或旧答案被直接证据否定时，才允许修改基线；低风险题保留已验证答案，高风险题才进行额外复核。
+### 2.5 研究报告与投研资料 | Research Reports and Investment Research
 
-The project uses risk filtering, evidence gating, and baseline protection. A
-new answer is accepted only when directly supported by evidence or when the
-baseline is directly contradicted. Low-risk answers are preserved while
-high-risk questions receive additional review.
+**面向的业务问题：**
 
-### 9. 公开项目必须兼顾复现和数据安全 | Reproducibility Must Coexist with Data Safety
+**Business questions addressed:**
 
-项目需要展示方法、代码和实验结论，但比赛数据、标准答案、evidence、提交结果和 API key 不能直接上传公开仓库。因此仓库提供数据目录说明和空 key 配置模板，使用者在本地准备授权数据后即可复现实验流程。
+- 研究结论、投资评级、目标价和风险提示；
+- 行业规模、增速、市场份额和毛利率；
+- 预测年份、指标口径和公司比较；
+- 观点改写后是否仍然保持原报告方向和限定条件。
 
-The project must expose its method, code, and experimental conclusions without
-publishing competition data, answer keys, evidence, submission files, or API
-keys. The repository therefore provides a local data-layout guide and a
-credential-free configuration template so users can reproduce the workflow
-with authorized local inputs.
+- Research conclusions, ratings, target prices, and risk warnings.
+- Market size, growth, market share, and gross margin.
+- Forecast years, metric definitions, and company comparisons.
+- Whether a paraphrased claim preserves the source direction and limitations.
 
-## 这个项目做了什么 | What This Project Does
+**适合的企业任务 | Suitable enterprise tasks:** 投研资料检索、研究观点核对、公司比较和风险提示抽取。
 
-### 1. 文档结构化 | Document Structuring
+Suitable for research retrieval, thesis verification, company comparison, and
+risk-warning extraction.
 
-解析 PDF、HTML 和 TXT，尽可能保留文档 ID、页码、段落、表格文本和字符位置，再按可追踪的 span 切分成检索片段。每个片段都能回指原始文档位置，便于审计和定位证据。
+**关键风险 | Key risk:** 项目不生成投资建议，也不验证研究报告观点的真实性或未来收益。
 
-The pipeline parses PDF, HTML, and TXT files while preserving document IDs, page numbers, paragraphs, table text, and character spans where possible. Text is split into traceable retrieval chunks so each piece of evidence can be linked back to its source location.
+The project does not produce investment advice or validate the truth or future
+returns of a research opinion.
 
-### 2. 分层证据检索 | Layered Evidence Retrieval
+## 3. 已完成的方法 | Implemented Methods
 
-项目不依赖 embedding 模型，而是使用关键词、数字、条款编号、中文字符 n-gram 和 BM25 风格评分。检索包括四层：
+### 3.1 文档解析与结构化 | Document Parsing and Structuring
 
-1. 题干级召回：找到与整道题最相关的文本。
-2. 选项级召回：A/B/C/D 每个选项独立检索，减少细节被高频题干词淹没。
-3. 文档覆盖召回：跨文档题尽量覆盖题目要求比较的每个文档。
-4. 邻近上下文扩展：补充命中片段的前后片段，减少证据落在切分边界外。
+已完成：
 
-The project does not require an embedding model. It uses keywords, numbers, clause identifiers, Chinese character n-grams, and BM25-style scoring. Retrieval has four layers: question-level recall, option-level recall, document-coverage recall, and neighboring-context expansion.
+Implemented:
 
-### 3. 领域化提示词 | Domain-Aware Prompts
+- PDF、HTML、TXT 文档发现和读取；
+- PDF 页面文本抽取；
+- PDF 表格行转换为可检索文本；
+- 文档 ID、领域、源路径、页码和字符 span 保存；
+- 问题、选项和文档引用标准化；
+- 预处理报告和缺失文档检查。
 
-针对不同金融文本类型强化不同的核查重点：保险责任与免责、监管条款与时限、合同期限与利率、财报年份与单位、研报指标口径与预测年份。模型必须区分“原文明确支持”“原文明确否定”和“证据不足”。
+- PDF, HTML, and TXT discovery and reading.
+- Page-level PDF text extraction.
+- Conversion of PDF table rows into searchable text.
+- Preservation of document ID, domain, source path, page, and character spans.
+- Normalization of questions, options, and document references.
+- Preprocessing reports and missing-document checks.
 
-Prompts emphasize domain-specific checks: insurance coverage and exclusions, regulatory clauses and deadlines, contract terms and rates, reporting periods and units, and research-report metrics and forecast years. The model is instructed to distinguish direct support, direct contradiction, and insufficient evidence.
+### 3.2 词法检索与证据定位 | Lexical Retrieval and Evidence Location
 
-### 4. 答案与提交约束 | Answer and Submission Constraints
+项目使用不依赖 embedding 的词法检索：关键词、数字、条款编号、中文字符/二元片段和 BM25 风格评分。检索不是最终答案，而是为模型提供可追溯的证据候选。
 
-系统按题型处理单选、多选、判断、计算和抽取题，统一答案格式，校验多选去重排序、答案槽位、CSV 表头、逐题 token 以及 summary 汇总，避免“答案本身正确但提交格式不合规”。
+The project uses embedding-free lexical retrieval over keywords, numbers,
+clause identifiers, Chinese character/bigram fragments, and BM25-style scores.
+Retrieval is not the final answer; it supplies traceable evidence candidates to
+the model.
 
-The system handles single-choice, multiple-choice, true/false, calculation, and extraction questions. It normalizes answers and validates multiple-choice ordering, answer slots, CSV headers, per-question usage, and summary totals.
+已完成四类召回：
 
-### 5. 精度与成本控制 | Accuracy and Cost Control
+Four retrieval layers are implemented:
 
-支持以下运行方式：
+1. 题干级召回 / question-level retrieval
+2. 选项级召回 / option-level retrieval
+3. 跨文档覆盖 / cross-document coverage
+4. 命中片段邻近上下文扩展 / neighboring-context expansion
 
-| 模式 | 作用 |
-| --- | --- |
-| `targeted` | 只重跑结构风险较高的题，保留基础答案，节省 token。 |
-| `broad` | 重跑更大范围的风险题，适合扩大复核范围。 |
-| `full` | 从头生成完整答案。 |
-| `precision` | 对剩余结构风险做更强复核，结果默认隔离保存。 |
-| `low-token` | 缩短证据上下文并关闭额外思考，降低成本。 |
-| `resume` | 从 checkpoint 和单题缓存继续运行。 |
-| `dry-run` | 只检查检索，不调用模型。 |
+### 3.3 领域配置与提示词 | Domain Profiles and Prompts
 
-Available modes include targeted risk reruns, broad review, full generation, precision review, low-token generation, resume from checkpoints, and retrieval-only dry runs.
+`agent/domain.py` 为五类领域配置检索数量、上下文上限、关键词和核查清单；提示词要求区分直接支持、直接否定和证据不足，避免使用金融常识替代原文。
 
-### 6. 可恢复和可审计运行 | Recoverable and Auditable Runs
+`agent/domain.py` configures retrieval limits, context budgets, query terms,
+and checklists for the five domains. Prompts distinguish direct support, direct
+contradiction, and insufficient evidence instead of replacing source text with
+general financial knowledge.
 
-每道题完成后写入单题缓存和 checkpoint；任务可通过 `Ctrl+C` 或停止信号安全暂停，后续跳过已完成题目。证据、原始模型输出和 usage 记录用于复盘，不应被手工伪造或覆盖。
+### 3.4 结构化答案与风险复核 | Structured Answers and Risk Review
 
-Each completed question is written to an atomic cache and checkpoint. A run can be safely interrupted with `Ctrl+C` or a stop signal and resumed without repeating completed questions. Evidence, raw model output, and usage records are retained for review and must not be manually fabricated.
+已完成：
 
-## 最有价值的提升 | Most Valuable Improvements
+Implemented:
 
-本地实验表明，最有效的提升来自结构化和风险控制，而不是无条件增加模型轮数：
+- 结构化 JSON 结果解析；
+- 单选、多选、判断、计算、抽取题答案规范化；
+- 选项判断与最终答案一致性检查；
+- 选项证据 ID 和跨文档覆盖检查；
+- targeted、broad、precision 等风险范围；
+- evidence gate 基线保护；
+- 可配置的 thinking、上下文长度和输出长度。
 
-Local experiments suggest that the largest gains came from structure and risk control rather than blindly adding more model calls:
+- Structured JSON result parsing.
+- Normalization for choice, true/false, calculation, and extraction answers.
+- Consistency checks between option judgments and final answers.
+- Option-evidence ID and cross-document coverage checks.
+- targeted, broad, and precision risk scopes.
+- Baseline protection through an evidence gate.
+- Configurable thinking, context, and output limits.
 
-1. **选项级召回 | Option-level retrieval**：显著改善多选题和细粒度判断题的证据覆盖。
-2. **基线保护 | Baseline protection**：只有新答案获得直接证据支持时才接受修改，避免一次复核破坏已验证答案。
-3. **领域核查 | Domain-specific checks**：减少年份、单位、百分比、条款义务和责任范围误读。
-4. **格式优先 | Format-first validation**：在提交前发现字段、排序、summary 和 token 求和问题。
-5. **真实 usage 账本 | Raw usage ledger**：记录每次 API 调用并按题合计，支持 B 榜 token 审计。
+### 3.5 Token、reasoning 与提交治理 | Token, Reasoning, and Submission Governance
 
-## 快速开始 | Quick Start
+B 榜链路已经实现：
 
-### 安装 | Installation
+The B-track path implements:
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements-dev.txt
-Copy-Item local_config.example.py local_config.py
-```
+- `answer_1` 至 `answer_4` 答案槽位；
+- `reasoning` 生成和基本一致性检查；
+- 原始 API usage 读取；
+- 多次调用按题累加；
+- 每题和 summary 的 token 等式；
+- qid、表头、行数和字段校验。
 
-在 `local_config.py` 中填写自己的配置：
+- `answer_1` through `answer_4` answer slots.
+- Reasoning generation and basic consistency checks.
+- Raw API usage capture.
+- Per-question aggregation across multiple calls.
+- Per-question and summary token equations.
+- qid, header, row-count, and field validation.
 
-Fill in the local configuration:
+### 3.6 运行恢复与工程化 | Recovery and Engineering Operations
 
-```python
-PROVIDER = "qwen"
-BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-API_KEY = "your-own-api-key"
-MODEL = "qwen3.6-plus"
-```
+已完成：
 
-也可以使用环境变量。命令行参数优先级最高，其次是 `local_config.py`，最后是环境变量和默认值。
+Implemented:
 
-Environment variables are also supported. The precedence is command-line arguments, `local_config.py`, environment variables, and defaults.
+- VSCode 任务和统一 `train.py` 入口；
+- 每题缓存和 checkpoint；
+- Ctrl+C 和停止文件安全暂停；
+- `resume` 续跑；
+- checkpoint 重建；
+- pytest 测试；
+- GitHub Actions 在 Windows/Python 3.10、3.12 上编译和测试；
+- `.gitignore`、空 key 配置、双语规则和数据布局说明。
 
-### A 榜 | A Track
+- VS Code tasks and the unified `train.py` entry point.
+- Per-question caches and checkpoints.
+- Safe pause through Ctrl+C and stop files.
+- Resume execution.
+- Checkpoint rebuilding.
+- pytest coverage.
+- GitHub Actions compilation and tests on Windows/Python 3.10 and 3.12.
+- `.gitignore`, credential-free config, bilingual rules, and data-layout docs.
 
-将授权的数据放入本地目录后运行：
+## 4. 企业视角下的交付价值 | Enterprise Value
 
-```powershell
-python train.py --mode preprocess
-python train.py --mode dry-run
-python train.py --mode targeted
-python train.py --mode check
-```
+### 4.1 提升资料检索效率 | Faster Document Research
 
-完整运行或继续中断任务：
+将“人工翻页查找”变成“问题—证据片段—答案—来源位置”的结构化流程，适合研究、尽调、合同审阅和合规初筛中的资料定位环节。
 
-```powershell
-python train.py --mode full
-python train.py --mode precision
-python train.py --mode resume
-```
+It turns manual page-by-page lookup into a structured
+“question-evidence-answer-source” workflow for research, due diligence,
+contract review, and compliance first-pass analysis.
 
-### B 榜 | B Track
+### 4.2 降低无依据回答风险 | Lower Unsupported-Answer Risk
 
-将 B 榜题目和原始文档放在本地 `upload_b/`，再运行：
+选项级召回、文档覆盖和 evidence gate 让答案修改必须有证据路径，便于复核人员判断“模型为什么这样答”。
 
-```powershell
-python script\run_b_full_ensemble.py
-python script\run_b_low_token.py
-python script\run_b_qwen36_compact.py
-python script\check_b_submission.py
-python script\check_b_compliant_submission.py
-```
+Option-level retrieval, document coverage, and evidence gating require an
+evidence path for answer changes, making model decisions easier to review.
 
-B 榜字段、reasoning、token 和评分规则见 [docs/COMPETITION_RULES.md](docs/COMPETITION_RULES.md)。系统结构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，实验总结见 [docs/PROJECT_SUMMARY.md](docs/PROJECT_SUMMARY.md)。
+### 4.3 支持成本与质量权衡 | Quality-Cost Trade-off
 
-See [docs/COMPETITION_RULES.md](docs/COMPETITION_RULES.md) for B-track fields, reasoning, token accounting, and scoring requirements. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the system design and [docs/PROJECT_SUMMARY.md](docs/PROJECT_SUMMARY.md) for experiments and transferable lessons.
+企业可以按业务风险选择：低风险问题使用紧凑上下文，高风险问题使用更多证据和复核；不必对所有问题使用同样的模型调用成本。
 
-## VS Code | VS Code
+Organizations can route low-risk questions through compact contexts and
+high-risk questions through richer evidence and review, instead of paying the
+same model cost for every question.
 
-`.vscode/tasks.json` 提供预处理、检索检查、训练、续跑和提交校验任务。也可以直接运行：
+### 4.4 形成可审计记录 | Auditable Records
 
-The VS Code task file provides preprocessing, retrieval checks, training, resume, and submission-validation tasks. You can also run:
+证据、模型输出、reasoning、usage 和 checkpoint 形成运行记录，有利于内部复盘、问题定位和提交前检查。该记录仍需按照企业数据保留和访问控制制度管理。
 
-```powershell
-python train.py
-```
+Evidence, model outputs, reasoning, usage, and checkpoints form an operational
+record for review, diagnosis, and pre-submission checks. They must still be
+managed under the organization's retention and access-control policies.
 
-## 测试 | Tests
+## 5. 当前需要修正的方法 | Methods That Need Correction
 
-```powershell
-python -m pytest
-python -m compileall -q train.py agent script
-```
+以下问题是基于当前代码边界得出的工程结论，不是把未实现能力包装成成果。
 
-## 目录 | Layout
+The following items are engineering conclusions from the current codebase, not
+claims of already implemented production capability.
 
-```text
-agent/                    核心模块 | Core modules
-script/                   运行与校验入口 | Runners and validators
-tests/                    自动化测试 | Automated tests
-docs/                     双语能力、规则、数据布局、架构与总结 | Bilingual capabilities, rules, data layout, architecture, and summaries
-skills/                   全量审查提示词 | Full-audit prompt skill
-train.py                  统一入口 | Unified CLI entry point
-```
+| 优先级 / Priority | 当前问题 / Current issue | 影响 / Impact | 建议修正 / Recommended correction |
+| --- | --- | --- | --- |
+| P0 | 词法检索为主，缺少可评估的混合语义召回 | 同义改写、跨语言表达或长距离语义关系可能漏召回 | 在允许使用的企业环境中增加可插拔向量召回和 reranker；用离线 `recall@k`、文档覆盖率和选项证据覆盖率评估。比赛环境是否允许必须单独确认。 |
+| P0 | 扫描 PDF/OCR 能力未形成完整链路 | 图片型表格或扫描合同可能没有有效文本 | 增加 OCR 适配层、页级质量分数、人工抽样和“文本缺失即阻断”的质量门。 |
+| P0 | B 榜脚本包含题目/文档特定约束 | 适合比赛复现，但不适合直接作为通用企业服务，规则变更也可能失效 | 将特定约束移出代码，改成版本化外部配置；建立通用模板与数据集适配层。 |
+| P0 | 缺少真实业务标注集和离线评估 | 只能依赖比赛分数，无法证明企业场景的准确率、召回率和拒答质量 | 建立经过授权的黄金集，评估 evidence recall、answer accuracy、unsupported-answer rate、拒答准确率和领域分项表现。 |
+| P1 | `usage_or_estimate` 存在调试估算路径 | API 未返回 usage 时，估算值不能用于合规提交或严肃成本核算 | 生产/B 榜模式应 fail-closed；估算只允许显式 debug 模式，并在结果中标记 `estimated=true`。 |
+| P1 | 复核策略主要是规则和模型提示，缺少校准 | 置信度未必等于真实正确率，高风险筛选可能漏题或过度复核 | 用带标签验证集做置信度校准、风险阈值选择和分领域阈值评估。 |
+| P1 | 缺少企业级访问控制、脱敏和多租户隔离 | 合同、客户和监管资料可能包含敏感信息 | 增加身份认证、租户隔离、文档权限继承、PII 脱敏、加密存储、审计日志和数据删除策略。 |
+| P1 | API 稳定性治理仍偏轻量 | 并发、限流、服务降级和成本异常缺少统一控制 | 增加 rate limit、指数退避上限、断路器、请求幂等键、预算告警和延迟/错误监控。 |
+| P2 | 当前以本地 CLI 为主 | 尚未形成企业内部服务或工作流系统 | 在核心函数之上增加稳定 API、任务队列、结果数据库和人工审核界面；CLI 继续作为运维入口。 |
+| P2 | 证据输出格式偏比赛审计 | 企业用户还需要引用片段、页面预览、版本和权限信息 | 建立统一 Evidence 对象：`document_id`、版本、页码、span、引用文本、权限和生成时间。 |
+| P2 | 规则文档和模型白名单不会自动同步 | 官方规则变化可能导致旧校验器误判 | 将字段 schema、模型白名单和评分版本配置化，并为每个规则版本保留校验测试。 |
 
-数据集、`runs/`、缓存、答案、证据、虚拟环境和 API key 都在 `.gitignore` 中排除。安全说明见 [SECURITY.md](SECURITY.md)。
+## 6. 比赛适配与企业产品的区别 | Competition Adapter vs Enterprise Product
 
-Datasets, `runs/`, caches, answers, evidence, virtual environments, and API keys are excluded by `.gitignore`. See [SECURITY.md](SECURITY.md) for security guidance.
+当前代码可以作为企业文档智能原型和比赛适配器，但还不是开箱即用的生产系统。原因是比赛与企业的目标不同：
+
+The current code can serve as a prototype for enterprise document
+intelligence and as a competition adapter, but it is not an out-of-the-box
+production system. Competition and enterprise requirements differ:
+
+| 维度 / Dimension | 比赛适配 / Competition adapter | 企业生产 / Enterprise production |
+| --- | --- | --- |
+| 数据 | 本地授权数据、固定目录 | 文档平台、权限和版本治理 |
+| 评估 | 线上分数和提交格式 | 黄金集、SLA、领域指标和人工抽检 |
+| 模型 | 赛事允许的 Qwen 模型 | 经审批的模型路由和供应商治理 |
+| 证据 | 满足题目和 reasoning 审计 | 可点击引用、版本、权限和保留策略 |
+| 成本 | prompt/completion token | 预算、并发、延迟和部门成本归属 |
+| 风险 | 防止提交失分 | 防止错误业务决策、数据泄露和合规违规 |
+
+## 7. 不应声称的能力 | Claims the Project Should Not Make
+
+为保持专业和真实，项目不应声称：
+
+To remain accurate and professional, the project should not claim that it:
+
+- 保证所有答案正确 / guarantees every answer;
+- 自动完成投资、交易、承保或监管审批 / automatically makes investment,
+  trading, underwriting, or approval decisions;
+- 已完成企业级权限、脱敏、加密和多租户 / already provides enterprise
+  authorization, redaction, encryption, or multi-tenancy;
+- 已完成 OCR 对所有扫描件的可靠识别 / reliably handles every scanned document;
+- 通过“训练模式”对 Qwen 参数进行了微调 / fine-tunes Qwen parameters through
+  the `train.py` modes;
+- 可以使用手工修改的 token 生成合规提交 / can create compliant submissions
+  with manually edited token values。
+
+## 8. 推荐企业化迭代路线 | Recommended Enterprise Roadmap
+
+### 阶段一：评估和数据质量 | Phase 1: Evaluation and Data Quality
+
+建立授权黄金集、文档版本、题型标签和人工证据标注；先测解析成功率、证据 `recall@k`、跨文档覆盖率和答案准确率。
+
+Build an authorized golden set, document versions, question-type labels, and
+human evidence annotations. Measure parsing success, evidence `recall@k`,
+cross-document coverage, and answer accuracy first.
+
+### 阶段二：检索和拒答 | Phase 2: Retrieval and Abstention
+
+评估词法检索与向量/重排组合，增加证据不足时的拒答或人工转审，并校准风险阈值。
+
+Evaluate lexical retrieval against a hybrid vector/reranking design, add
+abstention or human escalation when evidence is insufficient, and calibrate
+risk thresholds.
+
+### 阶段三：安全和服务化 | Phase 3: Security and Serviceization
+
+加入权限继承、脱敏、加密、审计日志、任务队列、限流、监控、预算告警和结果版本管理。
+
+Add permission inheritance, redaction, encryption, audit logs, job queues,
+rate limits, monitoring, budget alerts, and result versioning.
+
+### 阶段四：人工闭环 | Phase 4: Human-in-the-Loop
+
+让业务专家确认高风险条款、数字和拒答样本，把审核结果反馈为检索测试、提示词测试和领域规则，而不是直接手工覆盖答案。
+
+Let business experts review high-risk clauses, numbers, and abstentions. Feed
+their decisions back into retrieval tests, prompt tests, and domain rules
+rather than manually overwriting answers.
+
+## 9. 公开交付物 | Public Deliverables
+
+当前仓库已经包含：
+
+The repository includes:
+
+- A/B 榜核心处理和运行代码 / A/B processing and runner code
+- 五类金融领域配置 / five financial domain profiles
+- 分层证据检索 / layered evidence retrieval
+- Qwen OpenAI-compatible 客户端 / Qwen-compatible client
+- reasoning、token 和 CSV 校验 / reasoning, token, and CSV validation
+- checkpoint、停止和续跑 / checkpoints, stop, and resume
+- VS Code 任务和 GitHub Actions / VS Code tasks and GitHub Actions
+- 中英文规则、架构、数据布局、项目总结和本能力清单 / bilingual rules,
+  architecture, data layout, project summary, and this capability inventory
+
+数据集、标准答案、运行结果、证据、缓存和 API key 不在仓库中。目标 GitHub 仓库为：
+
+Datasets, answer keys, run outputs, evidence, caches, and API keys are not in
+the repository. The GitHub repository is:
+
+[lifu521-afk/tianchi-financial-qa](https://github.com/lifu521-afk/tianchi-financial-qa)
