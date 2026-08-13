@@ -10,6 +10,12 @@ An evidence-grounded Qwen agent for financial long-document question answering. 
 
 This repository contains the **method, source code, and documentation**. It intentionally excludes competition data, model outputs, caches, submission files, and API keys. Users must provide authorized datasets locally according to [docs/DATA_LAYOUT.md](docs/DATA_LAYOUT.md) and configure credentials through `local_config.py` or environment variables.
 
+完整功能清单、已完成模块、输入输出、运行模式和当前局限见 [docs/CAPABILITIES.md](docs/CAPABILITIES.md)。
+
+See [docs/CAPABILITIES.md](docs/CAPABILITIES.md) for the complete capability
+inventory, implemented modules, inputs and outputs, run modes, and current
+limitations.
+
 ## 这个项目做了什么 | What This Project Does
 
 ### 1. 文档结构化 | Document Structuring
@@ -159,7 +165,7 @@ python -m compileall -q train.py agent script
 agent/                    核心模块 | Core modules
 script/                   运行与校验入口 | Runners and validators
 tests/                    自动化测试 | Automated tests
-docs/                     双语规则、数据布局、架构与总结 | Bilingual rules, data layout, architecture, and summaries
+docs/                     双语能力、规则、数据布局、架构与总结 | Bilingual capabilities, rules, data layout, architecture, and summaries
 skills/                   全量审查提示词 | Full-audit prompt skill
 train.py                  统一入口 | Unified CLI entry point
 ```
