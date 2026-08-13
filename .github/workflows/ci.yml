@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Compile sources
+        run: python -m compileall -q train.py agent script
+
+      - name: Run tests
+        run: python -m pytest
+
+      - name: Verify local-only files are absent
+        shell: pwsh
+        run: |
+          $forbidden = @(
+            "local_config.py",
+            "answer.csv",
+            "evidence.json",
+            "public_dataset_a",
+            "processed_data",
+            "processed_data_b",
+            "upload_b",
+            "runs",
+            "run_cache"
+          )
+          $present = $forbidden | Where-Object { Test-Path -LiteralPath $_ }
+          if ($present) {
+            throw "Local-only files were committed: $($present -join ', ')"
+          }

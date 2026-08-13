@@ -1,0 +1,94 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Tianchi: train targeted",
+      "type": "shell",
+      "command": "python",
+      "args": ["train.py", "--mode", "targeted"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Tianchi: train broad",
+      "type": "shell",
+      "command": "python",
+      "args": ["train.py", "--mode", "broad"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Tianchi: train precision",
+      "type": "shell",
+      "command": "python",
+      "args": ["train.py", "--mode", "precision"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Tianchi: train low-token",
+      "type": "shell",
+      "command": "python",
+      "args": ["train.py", "--mode", "low-token"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Tianchi: train full",
+      "type": "shell",
+      "command": "python",
+      "args": ["train.py", "--mode", "full"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Tianchi: resume",
+      "type": "shell",
+      "command": "python",
+      "args": ["train.py", "--mode", "resume"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Tianchi: request stop",
+      "type": "shell",
+      "command": "python",
+      "args": ["train.py", "--mode", "stop"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Tianchi: clear stop",
+      "type": "shell",
+      "command": "python",
+      "args": ["train.py", "--mode", "clear-stop"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Tianchi: preprocess",
+      "type": "shell",
+      "command": "python",
+      "args": ["train.py", "--mode", "preprocess"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Tianchi: dry-run retrieval",
+      "type": "shell",
+      "command": "python",
+      "args": ["train.py", "--mode", "dry-run"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Tianchi: check submission",
+      "type": "shell",
+      "command": "python",
+      "args": ["train.py", "--mode", "check"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    }
+  ]
+}

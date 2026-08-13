@@ -1,0 +1,4 @@
+interface:
+  display_name: "Qwen Full Audit"
+  short_description: "Audit 100 finance QA items with evidence"
+  default_prompt: "Use $qwen-full-audit to run a full evidence-grounded ensemble audit of this Tianchi dataset."

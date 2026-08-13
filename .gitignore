@@ -1,0 +1,91 @@
+# Local credentials and machine-specific settings
+local_config.py
+.env
+.env.*
+!.env.example
+
+# Python and local environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+.conda/
+env/
+
+# Runtime state, caches, and generated experiment outputs
+run_cache/
+runs/
+cache/
+tmp/
+tmp*/
+*.checkpoint.csv
+*.checkpoint.jsonl
+*.jsonl
+
+# Competition datasets and generated source material
+public_dataset_a/
+processed_data/
+processed_data_b/
+upload_b/
+新建 DOCX 文档.docx
+
+# Local submission files and audit exports
+answer.csv
+evidence.json
+answer_suspects*.csv
+retrieval_coverage_report.csv
+retrieval_preview.json
+rules_extracted.txt
+待提交/
+最优/
+
+# Generated report previews and rendered images
+reports/tianchi_competition_weekly/weekly_report_preview*.pdf
+reports/tianchi_competition_weekly/rendered*/
+reports/
+experiments/
+
+# Local-only historical experiment scripts retained outside the public release
+script/analyze_b_audit_risk.py
+script/apply_b_verified_corrections.py
+script/apply_manual_audits.py
+script/audit_b_compact_evidence.py
+script/build_b_evidence_candidate.py
+script/build_b_evidence_rerun_list.py
+script/build_b_format_candidate.py
+script/build_b_morning_candidates_20260723.py
+script/build_b_restore91_compliant.py
+script/build_b_semantic_probes.py
+script/build_b_verified_candidate.py
+script/build_b_vetted_candidates.py
+script/build_candidates.py
+script/build_detailed_source_audit.py
+script/build_ensemble_candidates.py
+script/check_audit_evidence_docids.py
+script/compare_b_evidence_rerun.py
+script/compare_historical_answers.py
+script/create_b_precision_patch.py
+script/export_case_template_answers.py
+script/export_study_notes.py
+script/generate_manual_source_audit.py
+script/local_audit.py
+script/make_single_probe.py
+script/preserve_answers_with_usage.py
+script/recover_b_whitelist_failures.py
+script/run_b_whitelist_clean.py
+script/validate_precision_candidate.py
+tests/test_b_whitelist_clean.py
+tests/test_build_ensemble_candidates.py
+tests/test_compare_b_evidence_rerun.py
+tests/test_precision_candidate.py
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.git_publish/
+.git_publish_clean/
