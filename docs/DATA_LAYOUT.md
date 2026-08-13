@@ -89,3 +89,28 @@ git check-ignore -v local_config.py
 git check-ignore -v public_dataset_a
 git check-ignore -v runs
 ```
+
+## Standard Local Project Layout
+
+Source code, private datasets, generated indexes, and protected results should
+remain separate:
+
+```text
+project-root/
+  agent/                    # reusable QA, retrieval, and model code
+  script/                   # command-line entry points
+  tests/                    # deterministic validation tests
+  docs/                     # public documentation
+  public_dataset_a/         # local A-track dataset; ignored by Git
+  upload_b/                 # local B-track dataset; ignored by Git
+  processed_data/           # generated A-track index; ignored by Git
+  processed_data_b/         # generated B-track index; ignored by Git
+  runs/                     # temporary experiments; ignored by Git
+  artifacts/
+    best_experiments/       # protected best answers/evidence; ignored by Git
+  local_config.py           # local API credentials; ignored by Git
+```
+
+Routine outputs belong in `runs/`. Promote a result into
+`artifacts/best_experiments/` only after recording its score and evidence. Never
+overwrite a protected baseline.

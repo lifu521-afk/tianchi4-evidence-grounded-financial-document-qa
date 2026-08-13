@@ -23,7 +23,7 @@ def _record(answer: str) -> dict:
     }
 
 
-def test_official_header_uses_exact_eight_columns(tmp_path: Path) -> None:
+def test_official_header_uses_reasoning_schema(tmp_path: Path) -> None:
     rows = build_rows(
         expected_qids=["fc_b_001", "fc_b_002"],
         records={
@@ -36,7 +36,8 @@ def test_official_header_uses_exact_eight_columns(tmp_path: Path) -> None:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.reader(handle)
         assert tuple(next(reader)) == OFFICIAL_FIELDS
-        assert len(OFFICIAL_FIELDS) == 8
+        assert len(OFFICIAL_FIELDS) == 9
+        assert OFFICIAL_FIELDS[-1] == "reasoning"
 
     report = validate_submission(
         path,
@@ -65,14 +66,14 @@ def test_compact_answer_headers_are_rejected(tmp_path: Path) -> None:
     assert any("header mismatch" in error for error in report.errors)
 
 
-def test_extra_reasoning_column_is_rejected(tmp_path: Path) -> None:
-    path = tmp_path / "nine_columns.csv"
+def test_missing_reasoning_column_is_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "eight_columns.csv"
     path.write_text(
         "qid,answer_1,answer_2,answer_3,answer_4,prompt_tokens,"
-        "completion_tokens,total_tokens,reasoning\n"
-        "summary,,,,,600000,2000,602000,\n"
-        "fc_b_001,A,,,,300000,1000,301000,reason one\n"
-        "fc_b_002,B,,,,300000,1000,301000,reason two\n",
+        "completion_tokens,total_tokens\n"
+        "summary,,,,,600000,2000,602000\n"
+        "fc_b_001,A,,,,300000,1000,301000\n"
+        "fc_b_002,B,,,,300000,1000,301000\n",
         encoding="utf-8-sig",
     )
 

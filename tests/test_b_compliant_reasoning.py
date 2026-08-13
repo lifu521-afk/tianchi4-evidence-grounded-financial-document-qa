@@ -302,6 +302,8 @@ class BCompliantReasoningTests(unittest.TestCase):
         )
 
     def test_ins_b_010_clean_retrieval_excludes_unselected_product_docs(self) -> None:
+        if not Path("processed_data_b/chunks.jsonl").exists():
+            self.skipTest("requires the local ignored B-track processed index")
         question = {
             "qid": "ins_b_010",
             "domain": "insurance",
@@ -331,22 +333,23 @@ class BCompliantReasoningTests(unittest.TestCase):
         )
 
     def test_failed_clean_questions_include_all_decisive_anchors(self) -> None:
+        questions_path = Path("processed_data_b/questions.jsonl")
+        baseline_path = Path(
+            "runs/b_morning_submit_20260723_v2/"
+            "03_fc_b_019_plus_res_b_006_AB/answer.csv"
+        )
+        if not questions_path.exists() or not baseline_path.exists():
+            self.skipTest("requires local ignored B-track data and historical run")
         questions = {
             json.loads(line)["qid"]: json.loads(line)
             for line in (
-                Path("processed_data_b/questions.jsonl")
-                .read_text(encoding="utf-8")
-                .splitlines()
+                questions_path.read_text(encoding="utf-8").splitlines()
             )
             if line.strip()
         }
         baseline_answers: dict[str, list[str]] = {}
         import csv
 
-        baseline_path = Path(
-            "runs/b_morning_submit_20260723_v2/"
-            "03_fc_b_019_plus_res_b_006_AB/answer.csv"
-        )
         with baseline_path.open("r", encoding="utf-8-sig", newline="") as handle:
             for row in csv.DictReader(handle):
                 qid = str(row.get("qid") or "")

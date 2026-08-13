@@ -47,6 +47,7 @@ jobs:
             "processed_data_b",
             "upload_b",
             "runs",
+            "artifacts",
             "run_cache"
           )
           $present = $forbidden | Where-Object { Test-Path -LiteralPath $_ }

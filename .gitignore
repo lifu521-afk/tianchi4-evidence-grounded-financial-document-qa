@@ -19,6 +19,7 @@ env/
 # Runtime state, caches, and generated experiment outputs
 run_cache/
 runs/
+artifacts/
 cache/
 tmp/
 tmp*/
