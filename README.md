@@ -29,7 +29,7 @@ Manual page-by-page review is slow, while sending entire documents to an LLM
 can cause hallucinations, missing evidence, numeric mismatches, and excessive
 cost.
 
-## 项目主要针对的问题 | Rule-Driven Problems Addressed
+## 2. 项目主要针对的问题 | Rule-Driven Problems Addressed
 
 本项目针对的不是普通的开放式聊天，而是一个“**受原文证据约束、受题型约束、受评测字段约束、受模型调用审计约束**”的金融长文档问答任务。换句话说，系统的目标不是让模型生成一段看起来合理的回答，而是让每个最终答案都能回答四个问题：
 
@@ -280,7 +280,7 @@ document intelligence supporting document search, clause verification, metric
 extraction, cross-document comparison, and human review. It should not directly
 make investment, trading, underwriting, legal, or regulatory decisions.
 
-## 2. 重点覆盖的金融业务场景 | Financial Business Areas
+## 3. 重点覆盖的金融业务场景 | Financial Business Areas
 
 代码中的 `agent/domain.py` 明确配置了五类金融文本领域。以下是项目已经实际实现的业务核查重点，不是泛化的金融宣传。
 
@@ -288,7 +288,7 @@ The domain profiles in `agent/domain.py` explicitly cover five financial text
 areas. The following are the implemented business checks, not a claim of
 general financial coverage.
 
-### 2.1 金融合同与债券条款 | Financial Contracts and Bond Terms
+### 3.1 金融合同与债券条款 | Financial Contracts and Bond Terms
 
 **面向的业务问题：**
 
@@ -316,7 +316,7 @@ and due-diligence research.
 It must not directly decide whether to invest, execute a contract, or replace
 legal counsel.
 
-### 2.2 财务报告与经营指标 | Financial Reports and Operating Metrics
+### 3.2 财务报告与经营指标 | Financial Reports and Operating Metrics
 
 **面向的业务问题：**
 
@@ -345,7 +345,7 @@ research screening.
 It can assist with locating and calculating figures, but does not replace
 accounting, consolidation, or audit review.
 
-### 2.3 保险产品条款 | Insurance Product Terms
+### 3.3 保险产品条款 | Insurance Product Terms
 
 **面向的业务问题：**
 
@@ -373,7 +373,7 @@ support, and pre-underwriting document location.
 Coverage interpretation has legal and business consequences and requires final
 review by product, actuarial, legal, or compliance teams.
 
-### 2.4 监管规则与公司治理 | Regulation and Corporate Governance
+### 3.4 监管规则与公司治理 | Regulation and Corporate Governance
 
 **面向的业务问题：**
 
@@ -402,7 +402,7 @@ checks, and compliance-team first-pass review.
 This is regulatory-text retrieval, not an automated compliance conclusion.
 Updates, effective dates, and applicable entities require compliance review.
 
-### 2.5 研究报告与投研资料 | Research Reports and Investment Research
+### 3.5 研究报告与投研资料 | Research Reports and Investment Research
 
 **面向的业务问题：**
 
@@ -428,9 +428,9 @@ risk-warning extraction.
 The project does not produce investment advice or validate the truth or future
 returns of a research opinion.
 
-## 3. 已完成的方法 | Implemented Methods
+## 4. 已完成的方法 | Implemented Methods
 
-### 3.1 文档解析与结构化 | Document Parsing and Structuring
+### 4.1 文档解析与结构化 | Document Parsing and Structuring
 
 已完成：
 
@@ -450,7 +450,7 @@ Implemented:
 - Normalization of questions, options, and document references.
 - Preprocessing reports and missing-document checks.
 
-### 3.2 词法检索与证据定位 | Lexical Retrieval and Evidence Location
+### 4.2 词法检索与证据定位 | Lexical Retrieval and Evidence Location
 
 项目使用不依赖 embedding 的词法检索：关键词、数字、条款编号、中文字符/二元片段和 BM25 风格评分。检索不是最终答案，而是为模型提供可追溯的证据候选。
 
@@ -468,7 +468,7 @@ Four retrieval layers are implemented:
 3. 跨文档覆盖 / cross-document coverage
 4. 命中片段邻近上下文扩展 / neighboring-context expansion
 
-### 3.3 领域配置与提示词 | Domain Profiles and Prompts
+### 4.3 领域配置与提示词 | Domain Profiles and Prompts
 
 `agent/domain.py` 为五类领域配置检索数量、上下文上限、关键词和核查清单；提示词要求区分直接支持、直接否定和证据不足，避免使用金融常识替代原文。
 
@@ -477,7 +477,7 @@ and checklists for the five domains. Prompts distinguish direct support, direct
 contradiction, and insufficient evidence instead of replacing source text with
 general financial knowledge.
 
-### 3.4 结构化答案与风险复核 | Structured Answers and Risk Review
+### 4.4 结构化答案与风险复核 | Structured Answers and Risk Review
 
 已完成：
 
@@ -499,7 +499,7 @@ Implemented:
 - Baseline protection through an evidence gate.
 - Configurable thinking, context, and output limits.
 
-### 3.5 Token、reasoning 与提交治理 | Token, Reasoning, and Submission Governance
+### 4.5 Token、reasoning 与提交治理 | Token, Reasoning, and Submission Governance
 
 B 榜链路已经实现：
 
@@ -519,7 +519,7 @@ The B-track path implements:
 - Per-question and summary token equations.
 - qid, header, row-count, and field validation.
 
-### 3.6 运行恢复与工程化 | Recovery and Engineering Operations
+### 4.6 运行恢复与工程化 | Recovery and Engineering Operations
 
 已完成：
 
@@ -543,9 +543,9 @@ Implemented:
 - GitHub Actions compilation and tests on Windows/Python 3.10 and 3.12.
 - `.gitignore`, credential-free config, bilingual rules, and data-layout docs.
 
-## 4. 企业视角下的交付价值 | Enterprise Value
+## 5. 企业视角下的交付价值 | Enterprise Value
 
-### 4.1 提升资料检索效率 | Faster Document Research
+### 5.1 提升资料检索效率 | Faster Document Research
 
 将“人工翻页查找”变成“问题—证据片段—答案—来源位置”的结构化流程，适合研究、尽调、合同审阅和合规初筛中的资料定位环节。
 
@@ -553,14 +553,14 @@ It turns manual page-by-page lookup into a structured
 “question-evidence-answer-source” workflow for research, due diligence,
 contract review, and compliance first-pass analysis.
 
-### 4.2 降低无依据回答风险 | Lower Unsupported-Answer Risk
+### 5.2 降低无依据回答风险 | Lower Unsupported-Answer Risk
 
 选项级召回、文档覆盖和 evidence gate 让答案修改必须有证据路径，便于复核人员判断“模型为什么这样答”。
 
 Option-level retrieval, document coverage, and evidence gating require an
 evidence path for answer changes, making model decisions easier to review.
 
-### 4.3 支持成本与质量权衡 | Quality-Cost Trade-off
+### 5.3 支持成本与质量权衡 | Quality-Cost Trade-off
 
 企业可以按业务风险选择：低风险问题使用紧凑上下文，高风险问题使用更多证据和复核；不必对所有问题使用同样的模型调用成本。
 
@@ -568,7 +568,7 @@ Organizations can route low-risk questions through compact contexts and
 high-risk questions through richer evidence and review, instead of paying the
 same model cost for every question.
 
-### 4.4 形成可审计记录 | Auditable Records
+### 5.4 形成可审计记录 | Auditable Records
 
 证据、模型输出、reasoning、usage 和 checkpoint 形成运行记录，有利于内部复盘、问题定位和提交前检查。该记录仍需按照企业数据保留和访问控制制度管理。
 
@@ -576,7 +576,7 @@ Evidence, model outputs, reasoning, usage, and checkpoints form an operational
 record for review, diagnosis, and pre-submission checks. They must still be
 managed under the organization's retention and access-control policies.
 
-## 5. 当前需要修正的方法 | Methods That Need Correction
+## 6. 当前需要修正的方法 | Methods That Need Correction
 
 以下问题是基于当前代码边界得出的工程结论，不是把未实现能力包装成成果。
 
@@ -597,7 +597,7 @@ claims of already implemented production capability.
 | P2 | 证据输出格式偏比赛审计 | 企业用户还需要引用片段、页面预览、版本和权限信息 | 建立统一 Evidence 对象：`document_id`、版本、页码、span、引用文本、权限和生成时间。 |
 | P2 | 规则文档和模型白名单不会自动同步 | 官方规则变化可能导致旧校验器误判 | 将字段 schema、模型白名单和评分版本配置化，并为每个规则版本保留校验测试。 |
 
-## 6. 比赛适配与企业产品的区别 | Competition Adapter vs Enterprise Product
+## 7. 比赛适配与企业产品的区别 | Competition Adapter vs Enterprise Product
 
 当前代码可以作为企业文档智能原型和比赛适配器，但还不是开箱即用的生产系统。原因是比赛与企业的目标不同：
 
@@ -614,7 +614,7 @@ production system. Competition and enterprise requirements differ:
 | 成本 | prompt/completion token | 预算、并发、延迟和部门成本归属 |
 | 风险 | 防止提交失分 | 防止错误业务决策、数据泄露和合规违规 |
 
-## 7. 不应声称的能力 | Claims the Project Should Not Make
+## 8. 不应声称的能力 | Claims the Project Should Not Make
 
 为保持专业和真实，项目不应声称：
 
@@ -631,7 +631,7 @@ To remain accurate and professional, the project should not claim that it:
 - 可以使用手工修改的 token 生成合规提交 / can create compliant submissions
   with manually edited token values。
 
-## 8. 推荐企业化迭代路线 | Recommended Enterprise Roadmap
+## 9. 推荐企业化迭代路线 | Recommended Enterprise Roadmap
 
 ### 阶段一：评估和数据质量 | Phase 1: Evaluation and Data Quality
 
@@ -664,7 +664,7 @@ Let business experts review high-risk clauses, numbers, and abstentions. Feed
 their decisions back into retrieval tests, prompt tests, and domain rules
 rather than manually overwriting answers.
 
-## 9. 公开交付物 | Public Deliverables
+## 10. 公开交付物 | Public Deliverables
 
 当前仓库已经包含：
 
