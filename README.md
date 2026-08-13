@@ -16,7 +16,7 @@ See [docs/CAPABILITIES.md](docs/CAPABILITIES.md) for the complete capability
 inventory, implemented modules, inputs and outputs, run modes, and current
 limitations.
 
-## 项目主要针对的问题（结合赛题规则） | Rule-Driven Problems Addressed
+## 项目主要针对的问题 | Rule-Driven Problems Addressed
 
 本项目主要针对的不是普通的开放式聊天，而是“**必须依据指定金融原文作答，并同时满足准确率、推理摘要、Token 统计和 CSV 提交格式要求**”的长文档问答任务。赛题规则决定了系统必须同时解决以下问题：
 
