@@ -29,13 +29,14 @@ Manual page-by-page review is slow, while sending entire documents to an LLM
 can cause hallucinations, missing evidence, numeric mismatches, and excessive
 cost.
 
+## 项目主要针对的问题 | Rule-Driven Problems Addressed
+
 本项目针对的不是普通的开放式聊天，而是一个“**受原文证据约束、受题型约束、受评测字段约束、受模型调用审计约束**”的金融长文档问答任务。换句话说，系统的目标不是让模型生成一段看起来合理的回答，而是让每个最终答案都能回答四个问题：
 
 1. **依据是什么**：答案是否来自题目指定的金融原文？
 2. **为什么这样选**：证据是否足以支持每个选项、计算或抽取结果？
 3. **过程是否真实**：模型调用、reasoning 和 token 是否完整记录？
 4. **结果能否被平台和企业流程接受**：CSV 字段、答案编码、汇总值和审计记录是否一致？
-
 The project does not target ordinary open-ended chat. It targets a financial
 long-document QA task that is constrained by **source evidence, question type,
 evaluation schema, and model-call auditing**. The goal is not to produce a
