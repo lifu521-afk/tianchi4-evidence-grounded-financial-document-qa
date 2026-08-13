@@ -695,4 +695,4 @@ The repository includes:
 Datasets, answer keys, run outputs, evidence, caches, and API keys are not in
 the repository. The GitHub repository is:
 
-[lifu521-afk/tianchi-financial-qa](https://github.com/lifu521-afk/tianchi-financial-qa)
+[lifu521-afk/evidence-grounded-financial-document-qa](https://github.com/lifu521-afk/evidence-grounded-financial-document-qa)
