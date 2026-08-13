@@ -29,22 +29,255 @@ Manual page-by-page review is slow, while sending entire documents to an LLM
 can cause hallucinations, missing evidence, numeric mismatches, and excessive
 cost.
 
-本项目针对的是一个受规则约束的企业文档问答问题：
+本项目针对的不是普通的开放式聊天，而是一个“**受原文证据约束、受题型约束、受评测字段约束、受模型调用审计约束**”的金融长文档问答任务。换句话说，系统的目标不是让模型生成一段看起来合理的回答，而是让每个最终答案都能回答四个问题：
 
-The project addresses a governed document-QA problem with four constraints:
+1. **依据是什么**：答案是否来自题目指定的金融原文？
+2. **为什么这样选**：证据是否足以支持每个选项、计算或抽取结果？
+3. **过程是否真实**：模型调用、reasoning 和 token 是否完整记录？
+4. **结果能否被平台和企业流程接受**：CSV 字段、答案编码、汇总值和审计记录是否一致？
 
-1. **答案必须基于指定原文**：不能用模型常识替代来源证据。
-2. **答案必须精确匹配题型**：单选、多选、判断、计算和抽取题有不同输出约束。
-3. **过程必须可审计**：B 榜还要求 reasoning 和真实 API usage。
-4. **结果必须可提交、可恢复、可复盘**：CSV、summary、token、证据和 checkpoint 必须一致。
+The project does not target ordinary open-ended chat. It targets a financial
+long-document QA task that is constrained by **source evidence, question type,
+evaluation schema, and model-call auditing**. The goal is not to produce a
+plausible paragraph. The goal is for every final answer to address four
+questions:
 
-1. **Answers must be grounded in the supplied sources**, not model memory.
-2. **Answers must respect the question type**, with different constraints for
-   choices, true/false, calculations, and extraction.
-3. **The process must be auditable**, including reasoning and raw API usage on
-   the B track.
-4. **The workflow must be recoverable and reviewable**, with consistent CSV,
-   summary, token, evidence, and checkpoint artifacts.
+1. **What is the source?** Does the answer come from the specified financial
+   document?
+2. **Why is this the answer?** Does the evidence support each option,
+   calculation, or extraction result?
+3. **Is the process authentic?** Are model calls, reasoning, and tokens
+   recorded completely?
+4. **Can the result be accepted by the platform and enterprise workflow?** Are
+   CSV fields, answer encoding, totals, and audit records consistent?
+
+### 2.1 为什么不能当作普通聊天 | Why This Is Not Ordinary Chat
+
+普通聊天通常关注表达是否自然、回答是否有帮助；本项目面对的比赛和企业金融场景还要求“可证明、可复核、可提交”。模型即使给出一个常识上看似正确的答案，只要出现以下任一情况，结果仍然可能无效或不可采信：
+
+Ordinary chat usually focuses on whether an answer is fluent and helpful. This
+project also requires answers to be provable, reviewable, and submittable. A
+response may look correct from general knowledge but still be invalid or
+unreliable when it:
+
+- 没有在指定文档中找到直接依据；
+- 把不同年份、不同单位或不同公司的数字混在一起；
+- 只判断了多选题中的部分选项；
+- 将“可以”误读成“应当”，或将“不得”误读成“可以”；
+- 计算过程缺少原始数值、公式或单位；
+- `reasoning` 只重复最终答案，不能解释判断依据；
+- 漏记中间 API 调用的 token；
+- 输出字段、答案槽位、qid 或 summary 不符合官方模板。
+
+- lacks direct support in the specified document;
+- mixes figures from different years, units, or companies;
+- checks only some options in a multiple-choice question;
+- confuses “may”, “must”, and “must not”;
+- omits source values, formulas, or units in a calculation;
+- repeats the answer in `reasoning` without explaining the basis;
+- omits tokens from intermediate API calls; or
+- violates the official schema through fields, answer slots, qids, or summary
+  totals.
+
+### 2.2 约束一：答案必须依据指定金融原文 | Constraint 1: Source-Grounded Answers
+
+赛题的核心不是考模型记忆，而是考模型能否在给定的原始文档中找到并正确使用证据。原文可能来自财务报告、募集说明书、保险合同、监管文件或研究报告。系统不能使用外部常识替代原文，也不能因为某个选项“听起来合理”就选择它。
+
+The core task is not testing model memory. It is testing whether the model can
+find and correctly use evidence in the supplied source documents. Sources may
+include financial reports, offering documents, insurance contracts, regulatory
+texts, or research reports. General knowledge cannot replace the source, and an
+option cannot be selected merely because it sounds plausible.
+
+项目对应的处理链路是：
+
+The corresponding implementation is:
+
+```text
+原始文档 -> 文档解析 -> 可追踪切片 -> 题干/选项检索
+-> 紧凑证据上下文 -> 模型判断 -> 证据记录
+```
+
+```text
+raw documents -> parsing -> traceable chunks -> question/option retrieval
+-> compact evidence context -> model decision -> evidence record
+```
+
+每条证据尽量保留文档 ID、页码、chunk 顺序和源位置。这样企业人员可以复核模型引用的是哪份材料，而不是只能相信一段没有来源的生成文本。
+
+Evidence records retain document IDs, pages, chunk order, and source locations
+where available. Reviewers can therefore inspect which source the model used
+instead of trusting an unsupported generated paragraph.
+
+### 2.3 约束二：答案必须符合题型和精确匹配规则 | Constraint 2: Type-Aware Exact Answers
+
+不同题型的正确性定义不同：
+
+Correctness is defined differently by question type:
+
+| 题型 / Type | 项目需要处理的内容 / Required handling |
+| --- | --- |
+| 单选题 / Single-choice | 只能保留一个合法选项，检查是否存在多个被判为正确的选项。 / Keep one valid option and detect conflicting judgments. |
+| 多选题 / Multiple-choice | 每个选项分别判断，最后去重并按规则排序；漏选和多选都可能错误。 / Judge options independently, deduplicate, and sort; omissions and extras may be wrong. |
+| 判断题 / True/false | 使用官方规定的判断编码，不能随意输出自然语言。 / Use the official encoding rather than arbitrary natural language. |
+| 计算题 / Calculation | 提取原始数字、单位和公式，完成必要计算并按模板输出。 / Extract values and units, apply the formula, and format the result. |
+| 抽取题 / Extraction | 按题目要求提取一个或多个原文事实，保持顺序和答案槽位。 / Extract one or more source facts in the required order and slots. |
+
+因此，项目不是简单地要求模型“给出答案”，而是要求模型先完成选项级判断，再生成最终答案，并由代码做格式规范化和一致性检查。
+
+The system therefore does not ask the model only for a final answer. It first
+requires option-level judgments where applicable, then assembles the final
+answer and applies deterministic normalization and consistency checks.
+
+### 2.4 约束三：推理摘要必须可审计 | Constraint 3: Auditable Reasoning Summary
+
+B 榜规则要求提交 `reasoning`，并可能从逻辑连贯性、论证完整性和表达清晰度评价推理过程。这里的 reasoning 不是让系统提交隐藏思维链，而是提交一段足以支持答案的公开摘要。
+
+The B-track requires a `reasoning` field and may assess logical coherence,
+completeness, and clarity. This is not a request to submit hidden chain of
+thought. It is a concise public summary sufficient to support the answer.
+
+项目建议的 reasoning 结构是：
+
+The recommended reasoning structure is:
+
+```text
+证据位置：文档/页码/条款/表格
+关键事实：原文中与问题直接相关的事实
+判断过程：逐项排除、比较或必要计算
+结论：与提交答案完全一致
+```
+
+```text
+Evidence location: document/page/clause/table
+Key fact: source fact directly relevant to the question
+Decision: option elimination, comparison, or necessary calculation
+Conclusion: exactly consistent with the submitted answer
+```
+
+空泛模板、只重复字母、没有证据位置、与答案矛盾或加入原文没有提供的事实，都不能视为高质量审计摘要。
+
+A generic template, answer-only repetition, missing source location,
+contradictory text, or unsupported facts should not be treated as a high-
+quality audit summary.
+
+### 2.5 约束四：Token 统计必须真实完整 | Constraint 4: Complete Raw Token Accounting
+
+B 榜规则要求 `prompt_tokens`、`completion_tokens` 和 `total_tokens` 直接来自允许模型 API 的原始 `usage`。如果一道题发生了初始回答、证据判断、复核、reasoning 生成或重试等多次调用，就必须把相关调用全部计入该题。
+
+The B-track requires `prompt_tokens`, `completion_tokens`, and `total_tokens`
+to come directly from raw `usage` returned by an allowed model API. If a
+question triggers initial answering, evidence checking, review, reasoning
+generation, or retries, all related calls must be included for that question.
+
+项目需要满足以下关系：
+
+The project enforces these relationships:
+
+```text
+question.total_tokens
+  = question.prompt_tokens + question.completion_tokens
+
+summary.prompt_tokens
+  = sum(question.prompt_tokens)
+summary.completion_tokens
+  = sum(question.completion_tokens)
+summary.total_tokens
+  = sum(question.total_tokens)
+```
+
+这也是为什么项目保存每题的调用记录和 usage，而不是只在最后生成一个总数。缺少原始 usage 时，调试阶段可以识别为估算或直接失败；估算值不能用于合规的 B 榜提交。
+
+This is why the project stores per-question call records and usage rather than
+inventing a final total. When raw usage is unavailable, debug mode may mark an
+estimate or fail; estimated usage must not be used for a compliant B-track
+submission.
+
+### 2.6 约束五：CSV 是评测接口，不是普通导出文件 | Constraint 5: CSV Is an Evaluation Interface
+
+赛题平台会按 CSV 字段读取答案。A 榜和 B 榜的表头不同，B 榜还需要 `answer_1` 至 `answer_4` 和 `reasoning`。因此 CSV 不是运行结束后随手导出的文件，而是系统输出契约的一部分。
+
+The platform reads answers through a CSV schema. A- and B-track headers differ,
+and B-track submissions additionally require `answer_1` through `answer_4` and
+`reasoning`. CSV is therefore an output contract, not an afterthought.
+
+项目在提交前检查：
+
+Before submission, the project checks:
+
+- 表头是否与目标榜单模板一致；
+- 题目行数是否正确；
+- `qid` 是否唯一、完整且合法；
+- 答案字母和答案槽位是否符合题型；
+- token 是否为非负整数并且加和一致；
+- reasoning 是否存在且与答案一致；
+- summary 是否与普通题目行总和一致。
+
+- whether the header matches the target-track template;
+- whether the number of question rows is correct;
+- whether qids are unique, complete, and valid;
+- whether answer letters and slots match the question type;
+- whether tokens are non-negative integers with consistent sums;
+- whether reasoning exists and agrees with the answer; and
+- whether summary totals equal the question-row totals.
+
+### 2.7 约束六：结果必须可恢复和可复盘 | Constraint 6: Recoverable and Reviewable Runs
+
+完整运行 100 道长文档题目可能持续较长时间。项目每完成一道题就保存单题缓存和 checkpoint，支持安全停止、断点续跑和 checkpoint 重建，避免网络中断后从头开始。
+
+A full run over 100 long-document questions may take significant time. The
+project writes per-question caches and checkpoints after each completed item,
+supporting safe stop, resume, and checkpoint rebuilding instead of restarting
+after a network interruption.
+
+企业视角下，这意味着模型结果可以关联到具体运行批次、配置、证据和调用成本，便于定位错误来自解析、检索、模型、规则还是提交格式。
+
+From an enterprise perspective, results can be associated with a run,
+configuration, evidence, and call cost. This helps identify whether an error
+came from parsing, retrieval, the model, a rule, or output formatting.
+
+### 2.8 这四项约束如何形成完整闭环 | How the Constraints Form One Workflow
+
+这不是四个相互独立的功能，而是一条闭环：
+
+These are not independent features. They form one workflow:
+
+```text
+指定原文
+  -> 找到证据
+  -> 按题型判断
+  -> 生成可审计 reasoning
+  -> 累加真实 usage
+  -> 输出符合模板的 CSV
+  -> 保存证据与 checkpoint
+  -> 提交前自动校验
+```
+
+```text
+specified sources
+  -> retrieve evidence
+  -> decide by question type
+  -> generate auditable reasoning
+  -> aggregate raw usage
+  -> write schema-compliant CSV
+  -> save evidence and checkpoints
+  -> validate before submission
+```
+
+任何一个环节缺失都会影响最终结果：证据不对会影响准确率，reasoning 不完整会影响过程分，usage 不真实会触发审计风险，CSV 不合规则可能无法评测。
+
+Failure at any stage affects the outcome: poor evidence harms accuracy,
+incomplete reasoning harms process scoring, inaccurate usage creates audit risk,
+and an invalid CSV may not be evaluated at all.
+
+### 2.9 对企业应用的实际含义 | Enterprise Interpretation
+
+在企业内部，这套方法可以作为金融文档智能系统的原型，服务于资料检索、条款核对、指标抽取、跨文档比较和人工审核辅助。但它不应直接承担投资、交易、承保、法律结论或监管审批责任。
+
+Within an organization, this approach can serve as a prototype for financial
+document intelligence supporting document search, clause verification, metric
+extraction, cross-document comparison, and human review. It should not directly
+make investment, trading, underwriting, legal, or regulatory decisions.
 
 ## 2. 重点覆盖的金融业务场景 | Financial Business Areas
 
