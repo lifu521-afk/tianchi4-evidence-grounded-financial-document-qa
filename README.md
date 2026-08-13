@@ -16,6 +16,150 @@ See [docs/CAPABILITIES.md](docs/CAPABILITIES.md) for the complete capability
 inventory, implemented modules, inputs and outputs, run modes, and current
 limitations.
 
+## 项目主要针对的问题（结合赛题规则） | Rule-Driven Problems Addressed
+
+本项目主要针对的不是普通的开放式聊天，而是“**必须依据指定金融原文作答，并同时满足准确率、推理摘要、Token 统计和 CSV 提交格式要求**”的长文档问答任务。赛题规则决定了系统必须同时解决以下问题：
+
+This project targets more than ordinary open-ended chat. It addresses a
+long-document QA task in which answers must be grounded in the supplied
+financial sources while satisfying **accuracy, reasoning-summary, token
+accounting, and CSV submission requirements**. The rules create the following
+engineering problems:
+
+### 1. 长文档中快速找到正确原文 | Finding the Right Evidence in Long Documents
+
+赛题答案必须来自给定文档，而不是来自模型的常识或猜测。金融原文通常很长，关键信息可能位于不同页、表格、脚注或多个文档中。如果直接把整份文档放进 prompt，容易超出上下文限制，也会使模型忽略真正相关的段落。
+
+The answer must come from the supplied documents rather than model memory or
+guesswork. Financial sources are long, and the decisive fact may be in a
+different page, table, footnote, or document. Sending an entire document to the
+prompt can exceed the context budget and dilute the relevant evidence.
+
+因此项目实现文档解析、表格保留、可追踪切片和分层检索，优先把与题目相关的原文位置交给模型。
+
+The project therefore implements document parsing, table preservation,
+traceable chunking, and layered retrieval to provide the model with the most
+relevant source locations first.
+
+### 2. 多选题不能漏选、错选或多选 | Exact Multiple-Choice Matching
+
+按照赛题规则，多选题通常需要与标准答案完整匹配，漏选、错选和多选都可能判错。只让模型直接输出一个整体答案，容易出现“选项判断正确但最终组合错误”，或者某个选项没有被单独核实。
+
+Under the rules, multiple-choice answers generally require an exact match.
+Missing, incorrect, or extra options may all be scored wrong. Asking the model
+for only one final string can produce an incorrect combination even when some
+individual judgments are correct.
+
+项目让 A/B/C/D 选项分别参与检索和判断，再进行去重、排序和最终答案组合，从流程上降低漏选、误选和字母顺序错误。
+
+The project retrieves and judges A/B/C/D options independently, then performs
+deduplication, sorting, and final answer assembly to reduce omissions, false
+selections, and ordering errors.
+
+### 3. 金融数字和条款容易被误读 | Financial Numbers and Clauses Are Easy to Misread
+
+赛题中的错误经常来自年份、报告期、单位、百分比、金额、指标口径、条款编号、时限或“应当/不得/可以”等义务强度，而不是来自普通语言理解。一个数字看似相同，可能属于不同年份或不同单位。
+
+Many errors come from reporting periods, units, percentages, amounts, metric
+definitions, clause identifiers, deadlines, or obligation strength such as
+“must”, “must not”, and “may”. A matching number may still belong to a
+different year or unit.
+
+项目针对保险、监管、金融合同、财务报告和研究报告设置领域化核查规则，要求模型同时核对数值、口径、时间和适用范围。
+
+The project adds domain-aware checks for insurance, regulation, financial
+contracts, financial reports, and research reports. The model must verify the
+value, definition, period, and scope together.
+
+### 4. B 榜 reasoning 不能空泛 | B-Track Reasoning Must Be Auditable
+
+B 榜规则要求提交 `reasoning`，并可能根据逻辑连贯性、论证完整性和表达清晰度评分。空文本、只重复答案、与题目无关或与答案矛盾的摘要可能失分。
+
+The B-track requires a `reasoning` field and may score logical coherence,
+completeness, and clarity. Empty, answer-only, irrelevant, or contradictory
+summaries can receive no credit.
+
+项目生成“证据位置 + 关键事实 + 必要计算或判断 + 最终结论”的简短摘要，不要求提交完整思维链，但要求摘要能够支持最终答案并适合审计。
+
+The project produces a concise summary in the form “evidence location + key
+fact + necessary calculation or judgment + conclusion”. It does not require a
+hidden chain of thought, but the summary must support the submitted answer and
+remain auditable.
+
+### 5. Token 必须真实、完整且逐题统计 | Token Usage Must Be Real and Complete
+
+B 榜规则要求 `prompt_tokens`、`completion_tokens` 和 `total_tokens` 直接来自允许模型 API 的原始 `usage` 字段。同一道题发生多次调用时，证据摘要、答案生成、复核、reasoning 和重试等相关调用都必须计入，不能只记录最后一次调用或手动估算。
+
+The B-track requires `prompt_tokens`, `completion_tokens`, and `total_tokens`
+to come directly from the raw `usage` fields returned by an allowed model API.
+When a question uses multiple calls, related evidence, answer, review,
+reasoning, and retry calls must all be included. Recording only the last call or
+manually estimating usage is not compliant.
+
+项目为每题建立 usage 账本，按题汇总所有相关调用，并检查：
+
+The project keeps a per-question usage ledger and validates:
+
+```text
+total_tokens = prompt_tokens + completion_tokens
+summary.total_tokens = sum(question.total_tokens)
+```
+
+### 6. 答案正确也可能因 CSV 格式失分 | Correct Answers Can Still Fail Validation
+
+赛题要求固定表头、逐题一行、合法 `qid`、正确答案槽位和 summary 汇总。A 榜与 B 榜字段不同，不能把 A 榜的 `answer` 列直接当作 B 榜的 `answer_1` 至 `answer_4`，也不能遗漏 B 榜 `reasoning`。
+
+The rules require an exact header, one row per question, valid qids, correct
+answer slots, and consistent summary totals. A- and B-track schemas differ: an
+A-track `answer` column cannot be submitted directly as B-track
+`answer_1`-`answer_4`, and B-track `reasoning` cannot be omitted.
+
+项目提供独立的 A 榜和 B 榜校验器，在调用模型和提交平台之前检查字段、答案编码、qid、token、reasoning 和汇总行。
+
+Separate A- and B-track validators check fields, answer encoding, qids, token
+usage, reasoning, and summary rows before a file is sent to the platform.
+
+### 7. 长任务中断会造成重复消耗 | Long Jobs Can Be Interrupted
+
+100 道长文档题目的完整运行可能耗时较长，网络错误、API 超时、电脑休眠或终端关闭都会导致任务中断。如果没有缓存，续跑时可能重新调用已经完成的题目，浪费 token 并增加结果不一致的风险。
+
+Running a full set of long-document questions can take time. Network errors,
+API timeouts, sleep, or terminal closure may interrupt the process. Without
+caching, resuming may repeat completed calls, wasting tokens and increasing
+result variance.
+
+项目提供单题缓存、checkpoint、停止信号和 resume 模式，使任务可以在当前题完成保存后安全停止，并从未完成题继续。
+
+The project provides per-question caches, checkpoints, stop signals, and a
+resume mode. A run can stop after safely saving the current question and
+continue with unfinished questions later.
+
+### 8. 精度提升不能靠无依据地整体改答案 | Accuracy Improvements Must Be Evidence-Based
+
+多轮复核不一定提升准确率，模型有可能把已经正确的基线答案改错。赛题又是逐题精确匹配，因此“所有题重新生成一遍”并不等于更高分。
+
+More review calls do not automatically improve accuracy. A model may change a
+correct baseline answer into a wrong one, and exact per-question scoring makes
+such regressions costly. Rerunning every question is not the same as improving
+accuracy.
+
+项目使用风险题筛选、证据门控和基线保护：只有新答案得到直接证据支持，或旧答案被直接证据否定时，才允许修改基线；低风险题保留已验证答案，高风险题才进行额外复核。
+
+The project uses risk filtering, evidence gating, and baseline protection. A
+new answer is accepted only when directly supported by evidence or when the
+baseline is directly contradicted. Low-risk answers are preserved while
+high-risk questions receive additional review.
+
+### 9. 公开项目必须兼顾复现和数据安全 | Reproducibility Must Coexist with Data Safety
+
+项目需要展示方法、代码和实验结论，但比赛数据、标准答案、evidence、提交结果和 API key 不能直接上传公开仓库。因此仓库提供数据目录说明和空 key 配置模板，使用者在本地准备授权数据后即可复现实验流程。
+
+The project must expose its method, code, and experimental conclusions without
+publishing competition data, answer keys, evidence, submission files, or API
+keys. The repository therefore provides a local data-layout guide and a
+credential-free configuration template so users can reproduce the workflow
+with authorized local inputs.
+
 ## 这个项目做了什么 | What This Project Does
 
 ### 1. 文档结构化 | Document Structuring
