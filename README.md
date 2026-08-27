@@ -27,6 +27,29 @@ full-audit workflow, and compact single-call workflow are documented in
 inspect its rules and submission template before mapping question types,
 answer fields, reasoning, and token accounting.
 
+## Agent Runtime | Agent 工程运行时
+
+项目现已包含一个默认无需额外框架依赖的 Agent 运行时，将已有的金融 RAG、Qwen 调用和提交治理组织为明确的 `Planning -> Tool Use/RAG -> Solver -> Reflection -> Validation -> Memory -> Evaluation` 工作流。它保存公开可审计的运行轨迹和原始 usage，不保存或宣称导出隐藏思维链。
+
+The project now includes a dependency-free Agent runtime that organizes the
+existing financial RAG, Qwen integration, and submission governance into an
+explicit `Planning -> Tool Use/RAG -> Solver -> Reflection -> Validation ->
+Memory -> Evaluation` workflow. It preserves public operational traces and
+raw usage without storing or claiming to expose hidden chain-of-thought.
+
+```powershell
+# API-free retrieval, tool, reflection, memory, and trace smoke test
+python train.py --mode agent --limit 5
+
+# Explicitly enable the configured Qwen-compatible endpoint
+python train.py --mode agent --agent-llm --limit 5
+```
+
+The output is `runs/agent_runtime/trace.json` by default. It is an internal
+audit artifact, not a competition submission. See
+[`docs/AGENT_RUNTIME.md`](docs/AGENT_RUNTIME.md) and
+[`docs/EVALUATION.md`](docs/EVALUATION.md) for the design and metrics.
+
 ## 1. 企业要解决的核心问题 | Enterprise Problem
 
 金融企业通常拥有大量年报、合同、募集说明书、保险条款、监管文件和研究报告。业务人员需要回答“原文在哪里、具体数字是多少、条款如何约束、不同文档是否一致”，但人工逐页查找耗时，直接让大模型阅读整份文档又容易出现幻觉、漏证据、数字错位和成本失控。

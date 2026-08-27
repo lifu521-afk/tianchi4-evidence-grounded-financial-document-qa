@@ -58,6 +58,11 @@ execution, and submission validation.
 | checkpoint 与断点续跑 | 已实现并测试 / Implemented and tested | 单题原子缓存、停止信号、重建 checkpoint。Atomic question caches, stop signals, and checkpoint rebuilding. |
 | A/B CSV 格式校验 | 已实现并测试 / Implemented and tested | 检查字段、qid、答案、token 和 summary。Checks fields, qids, answers, usage, and summary. |
 | GitHub CI | 已实现 / Implemented | Windows 上运行 Python 3.10/3.12 编译和测试。Runs compile and tests on Python 3.10/3.12. |
+| Agent 状态图与规划 | 已实现并测试 / Implemented and tested | 显式任务计划、状态、步骤轨迹和失败状态。Explicit plans, state, step traces, and failure states. |
+| Tool Use 注册表 | 已实现并测试 / Implemented and tested | 检索和校验工具使用 allow-list、参数检查与调用记录。Retrieval and validation tools use an allow-list, argument checks, and call records. |
+| 运行/长期记忆接口 | 已实现并测试 / Implemented and tested | 任务隔离短期记忆和 JSONL 审核经验存储。Task-isolated short-term memory and JSONL reviewed-lesson storage. |
+| Reflection 与预算治理 | 已实现并测试 / Implemented and tested | 检查答案形状/证据覆盖并累计原始 usage 与任务预算。Checks answer shape/evidence coverage and aggregates raw usage against a task budget. |
+| 离线 Agent 评测 | 已实现并测试 / Implemented and tested | 准确率、证据覆盖、有效答案、复核率和 token 指标。Accuracy, evidence coverage, valid-answer, review-rate, and token metrics. |
 | 数据集自动下载 | 未实现 / Not implemented | 数据受比赛授权约束，必须由用户本地准备。Users must provide authorized data locally. |
 | 自动获得标准答案 | 未实现 / Not implemented | 系统不包含标准答案或绕过评测的方法。No answer key or evaluation bypass is included. |
 | 准确率保证 | 不保证 / Not guaranteed | 无标签数据不能证明每题正确。Unlabeled data cannot prove every answer correct. |

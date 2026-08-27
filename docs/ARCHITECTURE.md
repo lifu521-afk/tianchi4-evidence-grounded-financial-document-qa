@@ -33,6 +33,30 @@ retrieval, model generation, and submission validation. This makes it possible
 to diagnose whether an error came from parsing, retrieval, prompting, model
 choice, or CSV formatting.
 
+## 1.1 Agent Orchestration Layer | Agent 编排层
+
+The existing competition runners remain the stable A/B-track adapters. The
+new `agent.runtime` layer sits above reusable retrieval and model components
+and makes a broader Agent architecture explicit:
+
+```text
+Task State -> Planner -> Tool Registry / RAG -> Solver -> Reflection
+           -> Output Validation -> Memory Commit -> Evaluation Report
+```
+
+`AgentState` carries the task ID, plan, evidence, candidate/final answer,
+reflection result, memory hits, raw usage, tool calls, errors, and timestamped
+trace events. `CostLedger` accumulates every recorded model call and can stop
+an over-budget task. `RunMemory` is task-instance scoped; `JsonlMemory` is an
+optional append-only store for reviewed lessons. This makes state transitions,
+tool boundaries, and quality/cost signals inspectable without rewriting the
+proven A/B submission logic.
+
+The default executor is intentionally lightweight. `agent.runtime.langgraph_adapter`
+offers an optional integration boundary for teams that install LangGraph, but
+the repository does not list it as a mandatory dependency or misrepresent an
+unused framework as a runtime requirement.
+
 ## 2. 模块职责 | Module Responsibilities
 
 | 模块 | 职责 | Module | Responsibility |

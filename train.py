@@ -19,6 +19,9 @@ from agent.config import llm_config_from_env
 NO_API_MODES = {
     "preprocess",
     "dry-run",
+    "agent",
+    "evaluate",
+    "trace",
     "check",
     "stop",
     "clear-stop",
@@ -41,6 +44,8 @@ MODE_ALIASES = {
     "super-low": "super-low",
     "superlow": "super-low",
     "nano": "super-low",
+    "runtime": "agent",
+    "eval": "evaluate",
 }
 
 
@@ -499,9 +504,21 @@ def run_check(args: argparse.Namespace) -> None:
     run_step([sys.executable, script("check_submission.py"), "--file", str(check_file)], "check submission format")
 
 
+def run_agent_runtime(args: argparse.Namespace, *, execute_llm: bool = False) -> None:
+    cmd = [sys.executable, script("run_agent_runtime.py")]
+    limit = optional_int(args.limit if args.limit is not None else setting("LIMIT", 5))
+    if limit:
+        cmd += ["--limit", str(limit)]
+    if args.agent_output:
+        cmd += ["--output", str(project_path(args.agent_output))]
+    if args.agent_llm or execute_llm:
+        cmd.append("--execute-llm")
+    run_step(cmd, "run agent runtime")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="VSCode-friendly one-command runner for the Tianchi QA project.")
-    parser.add_argument("--mode", default=None, help="targeted/broad/precision/micro/super-low/full/low-token/resume/preprocess/dry-run/check/stop/clear-stop")
+    parser.add_argument("--mode", default=None, help="targeted/broad/precision/micro/super-low/full/low-token/resume/preprocess/dry-run/agent/evaluate/trace/check/stop/clear-stop")
     parser.add_argument("--limit", type=int, default=None, help="Only run the first N questions for debugging.")
     parser.add_argument("--review-mode", choices=["off", "auto", "broad", "always"], default=None)
     parser.add_argument("--max-context-chars", type=int, default=None)
@@ -513,13 +530,15 @@ def main() -> None:
     parser.add_argument("--no-preprocess", action="store_true", help="Skip automatic preprocessing checks.")
     parser.add_argument("--no-sync", action="store_true", help="Do not copy archived run result to final answer.csv/evidence.json.")
     parser.add_argument("--allow-non-qwen", action="store_true", help="Only for non-competition local tests.")
+    parser.add_argument("--agent-llm", action="store_true", help="For --mode agent: execute Qwen calls instead of the API-free trace.")
+    parser.add_argument("--agent-output", default=None, help="For --mode agent: JSON trace output path.")
     args = parser.parse_args()
 
     mode = normalize_mode(args.mode)
-    if mode not in {"targeted", "broad", "precision", "micro", "super-low", "full", "low-token", "resume", "preprocess", "dry-run", "check", "stop", "clear-stop"}:
+    if mode not in {"targeted", "broad", "precision", "micro", "super-low", "full", "low-token", "resume", "preprocess", "dry-run", "agent", "evaluate", "trace", "check", "stop", "clear-stop"}:
         raise SystemExit(f"Unknown mode: {mode}")
 
-    if mode not in NO_API_MODES:
+    if mode not in NO_API_MODES or args.agent_llm:
         ensure_api_ready(args.allow_non_qwen or bool_setting("ALLOW_NON_QWEN", False))
 
     if mode == "preprocess":
@@ -532,6 +551,14 @@ def main() -> None:
         if limit:
             cmd += ["--limit", str(limit)]
         run_step(cmd, "dry-run retrieval preview")
+        return
+    if mode in {"agent", "trace"}:
+        ensure_preprocessed(force=args.preprocess)
+        run_agent_runtime(args)
+        return
+    if mode == "evaluate":
+        ensure_preprocessed(force=args.preprocess)
+        run_agent_runtime(args, execute_llm=False)
         return
     if mode == "check":
         run_check(args)
