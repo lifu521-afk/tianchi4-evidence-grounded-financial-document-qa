@@ -8,6 +8,7 @@ that can also be adapted to a larger orchestration framework later.
 from .cost import CostLedger, Usage
 from .evaluation import EvaluationReport, evaluate_records
 from .graph import GraphNode, StateGraph
+from .harness import AgentHarness, HarnessConfig, HarnessResult
 from .memory import JsonlMemory, RunMemory
 from .orchestrator import EvidenceGroundedOrchestrator, OrchestratorConfig
 from .state import AgentState, TaskStatus, TraceEvent
@@ -19,6 +20,9 @@ __all__ = [
     "EvidenceGroundedOrchestrator",
     "EvaluationReport",
     "GraphNode",
+    "AgentHarness",
+    "HarnessConfig",
+    "HarnessResult",
     "JsonlMemory",
     "OrchestratorConfig",
     "RunMemory",

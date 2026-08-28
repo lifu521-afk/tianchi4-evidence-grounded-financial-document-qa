@@ -22,6 +22,7 @@ NO_API_MODES = {
     "agent",
     "evaluate",
     "trace",
+    "harness",
     "check",
     "stop",
     "clear-stop",
@@ -46,6 +47,7 @@ MODE_ALIASES = {
     "nano": "super-low",
     "runtime": "agent",
     "eval": "evaluate",
+    "workflow": "harness",
 }
 
 
@@ -513,12 +515,16 @@ def run_agent_runtime(args: argparse.Namespace, *, execute_llm: bool = False) ->
         cmd += ["--output", str(project_path(args.agent_output))]
     if args.agent_llm or execute_llm:
         cmd.append("--execute-llm")
+    if args.harness_attempts != 1:
+        cmd += ["--max-attempts", str(args.harness_attempts)]
+    if args.fail_fast:
+        cmd.append("--fail-fast")
     run_step(cmd, "run agent runtime")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="VSCode-friendly one-command runner for the Tianchi QA project.")
-    parser.add_argument("--mode", default=None, help="targeted/broad/precision/micro/super-low/full/low-token/resume/preprocess/dry-run/agent/evaluate/trace/check/stop/clear-stop")
+    parser.add_argument("--mode", default=None, help="targeted/broad/precision/micro/super-low/full/low-token/resume/preprocess/dry-run/agent/evaluate/trace/harness/check/stop/clear-stop")
     parser.add_argument("--limit", type=int, default=None, help="Only run the first N questions for debugging.")
     parser.add_argument("--review-mode", choices=["off", "auto", "broad", "always"], default=None)
     parser.add_argument("--max-context-chars", type=int, default=None)
@@ -532,10 +538,12 @@ def main() -> None:
     parser.add_argument("--allow-non-qwen", action="store_true", help="Only for non-competition local tests.")
     parser.add_argument("--agent-llm", action="store_true", help="For --mode agent: execute Qwen calls instead of the API-free trace.")
     parser.add_argument("--agent-output", default=None, help="For --mode agent: JSON trace output path.")
+    parser.add_argument("--harness-attempts", type=int, default=1, help="Agent Harness attempts per task; raw usage is aggregated.")
+    parser.add_argument("--fail-fast", action="store_true", help="Stop Agent Harness batch execution after a failed task.")
     args = parser.parse_args()
 
     mode = normalize_mode(args.mode)
-    if mode not in {"targeted", "broad", "precision", "micro", "super-low", "full", "low-token", "resume", "preprocess", "dry-run", "agent", "evaluate", "trace", "check", "stop", "clear-stop"}:
+    if mode not in {"targeted", "broad", "precision", "micro", "super-low", "full", "low-token", "resume", "preprocess", "dry-run", "agent", "evaluate", "trace", "harness", "check", "stop", "clear-stop"}:
         raise SystemExit(f"Unknown mode: {mode}")
 
     if mode not in NO_API_MODES or args.agent_llm:
@@ -552,7 +560,7 @@ def main() -> None:
             cmd += ["--limit", str(limit)]
         run_step(cmd, "dry-run retrieval preview")
         return
-    if mode in {"agent", "trace"}:
+    if mode in {"agent", "trace", "harness"}:
         ensure_preprocessed(force=args.preprocess)
         run_agent_runtime(args)
         return

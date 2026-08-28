@@ -25,6 +25,12 @@ and cycles, unknown nodes, or an excessive number of transitions fail closed.
 It makes branching and handoff boundaries explicit for multi-agent extensions
 without forcing an orchestration dependency into every local installation.
 
+`AgentHarness` wraps a runner with a standard execution lifecycle. It provides
+before/after hooks, bounded retries, batch execution, fail-fast policy, timing,
+and failure isolation. When a retry occurs, usage, tool calls, errors, and
+trace events from every attempt are merged into the returned task state. This
+is important for both honest cost accounting and post-run diagnosis.
+
 ## Components
 
 | Component | Implementation | Operational role |
@@ -36,6 +42,7 @@ without forcing an orchestration dependency into every local installation.
 | Reflection | `reflect_answer` | Checks answer normalization, evidence presence, and reasoning length. |
 | Cost control | `CostLedger` | Aggregates raw API usage and stops a task when its budget is exceeded. |
 | Evaluation | `evaluate_records` | Reports accuracy when labels exist, evidence coverage, validity, review rate, and token usage. |
+| Harness | `AgentHarness` | Provides lifecycle hooks, retries, batch policy, timing, and complete retry accounting. |
 
 ## Run
 
@@ -51,6 +58,16 @@ orchestrator = EvidenceGroundedOrchestrator(
 )
 state = orchestrator.run("case-001", question)
 print(state.final_answer, state.status)
+```
+
+The same runner can be placed under the harness:
+
+```python
+from agent.runtime import AgentHarness, HarnessConfig
+
+harness = AgentHarness(orchestrator.run, config=HarnessConfig(max_attempts=2))
+result = harness.run("case-001", question)
+print(result.state.final_answer, result.attempts, result.duration_ms)
 ```
 
 For a production or competition call, pass `OpenAICompatibleClient` and set

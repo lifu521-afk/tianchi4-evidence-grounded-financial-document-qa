@@ -43,6 +43,9 @@ python train.py --mode agent --limit 5
 
 # Explicitly enable the configured Qwen-compatible endpoint
 python train.py --mode agent --agent-llm --limit 5
+
+# Agent Harness: lifecycle, retry, batch, and trace control
+python train.py --mode harness --limit 5 --harness-attempts 2
 ```
 
 The output is `runs/agent_runtime/trace.json` by default. It is an internal

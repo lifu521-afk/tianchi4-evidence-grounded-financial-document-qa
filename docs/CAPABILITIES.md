@@ -63,6 +63,7 @@ execution, and submission validation.
 | 运行/长期记忆接口 | 已实现并测试 / Implemented and tested | 任务隔离短期记忆和 JSONL 审核经验存储。Task-isolated short-term memory and JSONL reviewed-lesson storage. |
 | Reflection 与预算治理 | 已实现并测试 / Implemented and tested | 检查答案形状/证据覆盖并累计原始 usage 与任务预算。Checks answer shape/evidence coverage and aggregates raw usage against a task budget. |
 | 离线 Agent 评测 | 已实现并测试 / Implemented and tested | 准确率、证据覆盖、有效答案、复核率和 token 指标。Accuracy, evidence coverage, valid-answer, review-rate, and token metrics. |
+| Agent Harness 执行框架 | 已实现并测试 / Implemented and tested | 统一生命周期、Hook、重试、批量失败策略、耗时和跨重试 usage 汇总。Unified lifecycle, hooks, retries, batch failure policy, timing, and usage aggregation across retries. |
 | 数据集自动下载 | 未实现 / Not implemented | 数据受比赛授权约束，必须由用户本地准备。Users must provide authorized data locally. |
 | 自动获得标准答案 | 未实现 / Not implemented | 系统不包含标准答案或绕过评测的方法。No answer key or evaluation bypass is included. |
 | 准确率保证 | 不保证 / Not guaranteed | 无标签数据不能证明每题正确。Unlabeled data cannot prove every answer correct. |

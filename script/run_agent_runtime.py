@@ -19,7 +19,7 @@ from agent.config import llm_config_from_env
 from agent.io_utils import read_jsonl, write_json
 from agent.qwen_client import OpenAICompatibleClient
 from agent.retrieval import LexicalIndex
-from agent.runtime import EvidenceGroundedOrchestrator, OrchestratorConfig, evaluate_records
+from agent.runtime import AgentHarness, EvidenceGroundedOrchestrator, HarnessConfig, OrchestratorConfig, evaluate_records
 from agent.runtime.rag import EvidenceRAG
 
 
@@ -31,6 +31,8 @@ def main() -> None:
     parser.add_argument("--evidence-mode", default="compact", choices=["full", "compact", "minimal", "micro", "nano"])
     parser.add_argument("--token-budget-per-task", type=int, default=0)
     parser.add_argument("--execute-llm", action="store_true", help="Call the configured Qwen-compatible endpoint.")
+    parser.add_argument("--max-attempts", type=int, default=1, help="Harness attempts per task; raw usage is merged across retries.")
+    parser.add_argument("--fail-fast", action="store_true", help="Stop a batch after the first failed task.")
     args = parser.parse_args()
 
     processed = (ROOT / args.processed_dir).resolve()
@@ -52,7 +54,16 @@ def main() -> None:
             enable_llm=args.execute_llm,
         ),
     )
-    records = [runtime.run(str(question.get("qid", index)), question).as_dict() for index, question in enumerate(questions[: args.limit], start=1)]
+    harness = AgentHarness(
+        runtime.run,
+        config=HarnessConfig(max_attempts=args.max_attempts, fail_fast=args.fail_fast),
+    )
+    results = harness.run_many((str(question.get("qid", index)), question) for index, question in enumerate(questions[: args.limit], start=1))
+    records = []
+    for result in results:
+        record = result.state.as_dict()
+        record["harness"] = result.as_dict()
+        records.append(record)
     report = evaluate_records(records).as_dict()
     output = (ROOT / args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
