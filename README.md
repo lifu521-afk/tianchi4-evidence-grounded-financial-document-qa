@@ -53,6 +53,11 @@ audit artifact, not a competition submission. See
 [`docs/AGENT_RUNTIME.md`](docs/AGENT_RUNTIME.md) and
 [`docs/EVALUATION.md`](docs/EVALUATION.md) for the design and metrics.
 
+For a complete learning guide covering the resume version, architecture,
+retrieval, Agent, Harness, memory, reflection, Token governance, testing,
+interview questions, and future roadmap, see
+[`docs/PROJECT_KNOWLEDGE_GUIDE.md`](docs/PROJECT_KNOWLEDGE_GUIDE.md).
+
 ## 1. 企业要解决的核心问题 | Enterprise Problem
 
 金融企业通常拥有大量年报、合同、募集说明书、保险条款、监管文件和研究报告。业务人员需要回答“原文在哪里、具体数字是多少、条款如何约束、不同文档是否一致”，但人工逐页查找耗时，直接让大模型阅读整份文档又容易出现幻觉、漏证据、数字错位和成本失控。
